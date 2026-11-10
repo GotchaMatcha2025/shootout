@@ -238,7 +238,8 @@ const Play = {
         '<p class="eyebrow">' + (r.mode === "free" ? "FREE SHOT" : "YOUR 3 SHOTS") + " · " + esc(r.name) + "</p>" +
         '<p class="res-head">' + esc(this.headline()) + "</p>" +
         '<div class="res-score"><div class="dots" id="resDots"></div><span>' + goals + " of " + r.shots + " goal" + (r.shots > 1 ? "s" : "") + "</span></div></div></div>" +
-      '<div class="prize saving" id="prizeCard"><img class="prize-photo" id="pPhoto" src="assets/img/matcha-latte-cut.webp" alt="" width="84" height="105" hidden>' +
+      (Api.test ? '<p class="err" style="text-align:center">TEST SERVER: not a real prize.</p>' : "") +
+      '<div class="prize saving' + (Api.test ? " testcard" : "") + '" id="prizeCard"><img class="prize-photo" id="pPhoto" src="assets/img/matcha-latte-cut.webp" alt="" width="84" height="105" hidden>' +
         '<div class="prize-what" id="pWhat">…</div><div class="prize-sub" id="pSub">Saving your result</div>' +
         '<div class="prize-code" aria-label="Prize code" id="pCode">····</div><div class="prize-timer" id="prizeTimer"></div>' +
         '<div class="prize-rules">Today only · at the booth · with a new purchase<br>' + esc(CONFIG.prizeRules) + '</div><div class="stamp">USED</div><div class="prize-roll"><span class="ball"></span></div></div>' +

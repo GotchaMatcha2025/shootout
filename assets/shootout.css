@@ -113,6 +113,7 @@ a{color:var(--green)}
   background:linear-gradient(100deg,rgba(255,255,255,0),rgba(255,255,255,.75),rgba(255,255,255,0));transform:skewX(-18deg);animation:sweep 3.4s ease-in-out 1s infinite}
 @keyframes sweep{0%{left:-60%}35%,100%{left:130%}}
 .prize.used::after,.prize.expired::after,.prize.saving::after{display:none}
+.prize.testcard{background:repeating-linear-gradient(-45deg,#F5F0E5 0 18px,#ffe9a6 18px 36px)}
 .prize-photo{width:84px;height:auto;margin:-6px auto 2px;display:block;filter:drop-shadow(0 6px 8px rgba(0,0,0,.25))}
 .prize-what{font:900 36px/1.02 var(--font);letter-spacing:-.01em;text-wrap:balance}
 .prize-sub{font:800 17px/1.25 var(--font);opacity:.72;margin-top:4px}

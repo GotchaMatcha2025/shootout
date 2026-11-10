@@ -63,9 +63,9 @@
     'caonima', 'shabi', 'wocao', 'jibai', 'pantat', 'knnb', 'ccb', 'chaocb', 'niama', 'fcuk', 'phuk', 'fuq', 'fack', 'burit', 'pundai',
     'keling', 'kotek', 'chink', 'dildo', 'boob', 'horny', 'nude', 'jerkoff', 'wank', 'retard', 'molest', 'kimak', 'thevidiya', 'thevdiya',
     'thevidya', 'pondan', 'bapok', 'kafir', 'kkk', 'siegheil', 'pedo', 'tetek', 'pepek', 'jilat', 'sundal', 'paria', 'pariah', 'motherf', 'mthrf',
-    'sexgod', 'killyou', 'killu', 'diulei', 'diunei', 'diulay'];
+    'sexgod', 'killyou', 'killu', 'diulei', 'diunei', 'diulay', 'pukl', 'terrorist'];
   var BAD_WORDS = ['cb', 'knn', 'lj', 'sb', 'nmsl', 'kns', 'fk', 'cao', 'diu', 'ass', 'tmd', 'wtf', 'stfu', 'babi', 'sial', 'bodoh', 'sex',
-    'rape', 'kill', 'cnm', 'kote', 'otha', 'nnb', 'paki', 'negro', 'nig', 'niga', 'nigas', 'fag', 'fags', 'hoe', 'cum', 'anal', 'cock', 'cibai', 'kys', 'heil', 'isis', 'cocks', 'mofo'];
+    'rape', 'kill', 'cnm', 'kote', 'otha', 'nnb', 'paki', 'negro', 'nig', 'niga', 'nigas', 'fag', 'fags', 'hoe', 'cum', 'anal', 'cock', 'cibai', 'kys', 'heil', 'isis', 'cocks', 'mofo', 'spic'];
   var ALLOW = ['dickson', 'dickens', 'dickinson', 'dickie', 'hancock', 'peacock', 'babcock', 'hitchcock', 'woodcock', 'cockburn', 'cummings',
     'scunthorpe', 'matsushita', 'ashita', 'hashim', 'mashita'];
   function checkName(raw) {

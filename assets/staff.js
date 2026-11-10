@@ -27,7 +27,8 @@ const Staff = {
     const r = await Api.post("/staff/login", { pin: this.pin }, 8000);
     this.busy = false; this.pin = ""; setTimeout(() => this.dots(), 200);
     if (r.ok && r.token){ this.token = r.token; Store.set(STAFF_KEY, { token: r.token, day: r.token.split(".")[0] }); this.showMain(); return; }
-    $("#pinErr").hidden = false; $("#pinErr").textContent = r.code === "bad-pin" ? "Wrong PIN. Try again." : (r.message || "No signal. Try again.");
+    $("#pinErr").hidden = false;
+    $("#pinErr").textContent = r.code === "bad-pin" ? "Wrong PIN. Try again." : r.code === "busy" ? "Too many wrong PINs. Try again after the hour, or use a phone that's already logged in." : (r.message || "No signal. Try again.");
   },
   showMain(){ $("#staffPin").hidden = true; $("#staffMain").hidden = false; this.refresh(); },
   logout(why){
@@ -99,7 +100,10 @@ const Staff = {
         "<li><b>Someone shows a prize:</b> hold \"Staff: hold to redeem\" on their phone, then wait for ✓ confirmed (no tick after 10 seconds: type their code above). One prize per order.</li>" +
         "<li><b>A rude name on the wall:</b> tap Hide, or take all names off.</li>" +
         "<li><b>Last 20 minutes:</b> no new games (Fri/Sat after 9:40pm, Sun after 5:40pm). Fri/Sat cup cards still work the next day; on Sunday after 5:40pm give no card.</li>" +
-        "<li><b>Closing:</b> match \"Prizes used today\" with the till.</li>" +
+        "<li><b>\"Card in use on another phone\":</b> a new card only for the buyer whose phone died, never for a friend.</li>" +
+        "<li><b>A prize card with TEST on it</b> is not real: no discount.</li>" +
+        "<li><b>Before opening:</b> log in on the booth phones and stay logged in all day.</li>" +
+        "<li><b>Closing:</b> match \"Prizes used today\" with the till (old yuzu prizes swapped for $2 off still count under yuzu).</li>" +
         "<li><b>Wall screen:</b> open …/shootout/wall/ on the projector, press Sound on and Full screen.</li></ul>" +
         '<button class="smallbtn" id="logout" style="align-self:flex-start">Log out</button></div>';
     const rc = $("#rCode"); rc.value = keep || ""; if (hadFocus) rc.focus();

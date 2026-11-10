@@ -14,7 +14,8 @@ const toMs = x => typeof x === "number" ? x : Date.parse(x);
 const hr = ms => HF ? HF.format(new Date(ms)).replace(":00", "").replace(/[\s\u202f]+/g, "").toLowerCase() : clock(ms);
 function renderRules(c){
   const Z = c.prizes, cb = c.odds.cornerBonus != null ? c.odds.cornerBonus : 0.5;
-  const range = g => Math.max(0, Math.floor(g * (1 - cb / 2) * 10)) + "–" + Math.min(10, Math.ceil(Math.min(0.985, g * (1 + cb / 2)) * 10)) + " in 10";
+  // lowest = dead centre on the ground; highest = the best on-target corner (corner value ≈ 0.94 once the post and bar bands are taken out)
+  const range = g => Math.round(g * (1 - cb / 2) * 10) + "–" + Math.round(Math.min(0.985, g * (1 - cb / 2 + cb * 0.938)) * 10) + " in 10";
   const cap = s => s.toLowerCase().replace(/^./, x => x.toUpperCase());
   const who = esc(CONFIG.company.name) + (CONFIG.company.legal ? " (" + esc(CONFIG.company.legal) + ")" : "");
   $("#rulesDoc").innerHTML =

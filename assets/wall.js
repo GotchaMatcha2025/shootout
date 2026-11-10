@@ -57,6 +57,10 @@ const Wall = {
     this.pitch.resize();
   },
   async poll(){
+    try { await this.pollOnce(); } catch (e) { console.error(e); }   // one bad answer must never stop the wall for the day (review M4)
+    setTimeout(() => this.poll(), (CONFIG.wallPollSeconds || 2) * 1000);
+  },
+  async pollOnce(){
     const r = await Api.post("/wall", { after: this.last }, 5000);
     if (r.ok){
       this.fails = 0; this.online = true; this.data = r;
@@ -66,7 +70,6 @@ const Wall = {
       if (!first) (r.events || []).forEach(ev => this.onEvent(ev));
       this.render();
     } else if (++this.fails >= 2){ this.online = false; this.render(); }
-    setTimeout(() => this.poll(), (CONFIG.wallPollSeconds || 2) * 1000);
   },
   headlines(){
     const d = this.data, list = [];
@@ -74,7 +77,7 @@ const Wall = {
     CONFIG.headlines.forEach(h => {
       if (h !== "@ODDS") return list.push(h);
       const c = d && d.counts;
-      if (c && c.hatTricks >= 3 && c.rounds >= 15) list.push("Only 1 in " + Math.round(c.rounds / c.hatTricks) + " get a hat trick.");
+      if (c && c.hatTricks >= 3 && c.rounds >= 15) list.push("Only 1 in " + Math.round(c.rounds / c.hatTricks) + " cup cards gets a hat trick.");
     });
     return list;
   },
@@ -130,6 +133,7 @@ const Wall = {
   nextCel(){
     const c = this.cel.shift(), box = $("#wCel");
     if (!c){ this.celOn = false; box.hidden = true; return; }
+    if (c.name){ const d = this.data, rows = (d && d.hall && d.hall.rows) || []; if ((d && d.switches && d.switches.namesOff) || !rows.some(h => h.name === c.name)) c.name = null; }
     this.celOn = true; box.hidden = false; box.className = "w-cel show" + (c.kind === "hat" ? " hat" : "");
     const img = $("#wCelImg"); img.hidden = c.kind !== "hat"; if (c.kind === "hat") img.src = "../assets/img/cat-ok-gotcha-cream.webp";
     $("#wCelBig").textContent = c.kind === "hat" ? "hat trick!" : "goal!";

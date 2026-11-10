@@ -39,7 +39,7 @@ class Pitch {
   on(n, f){ (this.ev[n] || (this.ev[n] = [])).push(f); }
   emit(n, a){ (this.ev[n] || []).slice().forEach(f => f(a)); }
   once(n, f){ const w = a => { this.ev[n] = (this.ev[n] || []).filter(x => x !== w); f(a); }; this.on(n, w); }
-  visible(){ return this.c.offsetParent !== null && this.c.clientWidth > 0; }
+  visible(){ return !this.paused && this.c.offsetParent !== null && this.c.clientWidth > 0; }
   setCy(v){ if (this.o.cy === v) return; this.o.cy = v; this.W = 0; this.resize(); }
   resize(){
     const w = this.c.clientWidth, h = this.c.clientHeight; if (!w || !h) return;

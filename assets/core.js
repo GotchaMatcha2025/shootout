@@ -96,6 +96,8 @@ const Api = (() => {
   }
   return { mode, base, post, now: () => Date.now() + offset, test: mode !== "live" };
 })();
+// phone storage is kept apart per server, so a staging test never leaves a ghost prize or a "free shot used" on the live game (review M1)
+const NS = "shootout:" + (Api.mode === "live" ? "" : Api.mode + ":");
 
 /* ---------- sound: synthesised with Web Audio (no files to download, nothing to licence). Off until the first tap (browser rule). ---------- */
 const Sfx = {

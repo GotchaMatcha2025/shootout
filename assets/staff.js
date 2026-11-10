@@ -1,6 +1,6 @@
 /* Gotcha Shootout — the staff phone page. The PIN is checked by the server (wrong tries slowed down); the page keeps a day token. */
 "use strict";
-const STAFF_KEY = "shootout:staff";
+const STAFF_KEY = NS + "staff";
 const Staff = {
   pin: "", token: null, s: null, msg: "", msgOk: false, lastCode: "", codeDraft: "", sig: "", busy: false,
   init(){
@@ -45,7 +45,7 @@ const Staff = {
     this.stale = false; this.s = r;
     // redraw the whole page only when the names or switches change, so a Hide tap never lands on a moved row
     const sig = JSON.stringify([r.names, r.switches, r.status]);
-    if (sig !== this.sig || !$("#staffTiles")) this.render(); else { $("#staffTiles").innerHTML = this.tiles(r.tiles); this.paintStale(); }
+    if (sig !== this.sig || !$("#staffTiles")) this.render(); else { $("#staffTiles").innerHTML = this.tiles(r.tiles); $("#staffTally").innerHTML = this.tally(r); this.paintStale(); }
   },
   paintStale(){ const el = $("#staleNote"); if (el) el.hidden = !this.stale; },
   tiles(t){
@@ -56,6 +56,13 @@ const Staff = {
       '<div class="tile"><b>' + (t.goals || 0) + "</b><span>goals: " + pct(t.goals, t.shots) + "% of " + (t.shots || 0) + " shots</span></div>" +
       '<div class="tile"><b>' + (t.rounds || 0) + "</b><span>cup-card rounds (3 shots)</span></div>" +
       '<div class="tile"><b>' + (t.hatTricks || 0) + "</b><span>hat tricks: " + pct(t.hatTricks, t.rounds) + "% of " + (t.rounds || 0) + " rounds</span></div>";
+  },
+  // for the till at closing: today's used prizes by prize (most used first), staff-made cards, undos
+  tally(s){
+    const used = Object.entries(s.used || {}).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+    return '<p class="sub">Most used first. Match these with the till at closing.</p>' +
+      (used.length ? '<div class="namelist">' + used.map(([k, n]) => '<div class="namerow"><span>' + esc(k) + "</span><b>" + n + "</b></div>").join("") + "</div>" : '<p class="sub">No prizes used yet today.</p>') +
+      '<p class="sub">Staff-made cup codes today: <b>' + (s.staffCups || 0) + "</b> · Undos today: <b>" + (s.undos || 0) + "</b></p>";
   },
   render(){
     const s = this.s; if (!s) return;
@@ -68,12 +75,13 @@ const Staff = {
       '<div class="staff-top"><h2>Staff</h2><img src="../assets/img/cat-chawan-cream.webp" alt="" width="64" height="46"></div>' +
       '<p class="staff-stale" id="staleNote" hidden>No signal: these numbers may be old. Prizes on customers\' phones still work.</p>' +
       (s.status && s.status !== "open" ? '<p class="staff-stale">Game status: ' + esc(s.status) + (sw.paused ? " (paused here)" : "") + "</p>" : "") +
-      '<div class="sec"><h2>Redeem a prize</h2><p class="sub"><b>Hold first.</b> No grey USED on their phone, no discount. Type the code here only when their phone died or froze.</p>' +
+      '<div class="sec"><h2>Redeem a prize</h2><p class="sub"><b>Hold first.</b> You hold their phone; it must turn green ✓ right then. Already grey or red before you hold = no discount. Type the code here only when their phone died or froze.</p>' +
         '<div class="row"><input class="input" id="rCode" maxlength="4" placeholder="4 letters" aria-label="Prize code" autocomplete="off" autocapitalize="characters" spellcheck="false"><button class="btn" id="rGo" style="flex:0 0 auto;min-height:56px">Redeem</button></div>' +
         (this.msg ? '<p class="' + (this.msgOk ? "okmsg" : "err") + '">' + this.msg + "</p>" : "") +
         '<div class="row" style="flex-wrap:wrap"><input class="input" id="uCode" maxlength="4" placeholder="Undo code" aria-label="Code to undo" autocomplete="off" autocapitalize="characters" spellcheck="false" style="min-height:44px;font-size:17px"><button class="smallbtn" id="uGo" style="flex:0 0 auto">Undo a redeem</button></div>' +
         (this.lastCode ? '<button class="smallbtn" id="rUndo">Undo ' + esc(this.lastCode) + " (pressed by mistake)</button>" : "") + "</div>" +
       '<div class="sec"><h2>Today</h2><div class="tiles" id="staffTiles">' + this.tiles(s.tiles) + "</div></div>" +
+      '<div class="sec"><h2>Prizes used today</h2><div id="staffTally">' + this.tally(s) + "</div></div>" +
       '<div class="sec"><h2>Names</h2><p class="sub">On the wall first (newest first), then the newest players. Tap Hide and the name leaves the wall within 2 seconds.</p>' +
         '<button class="btn ' + (sw.namesOff ? "cream" : "ghost") + '" id="namesOff">' + (sw.namesOff ? "Put names back on the wall" : "Take all names off the wall") + "</button>" +
         '<div class="namelist">' +
@@ -83,13 +91,15 @@ const Staff = {
       '<div class="sec"><h2>Out of cup cards?</h2><p class="sub">Makes one code. The customer scans it from this phone. One card per paid drink.</p><button class="btn ghost" id="newCup">New cup code</button><div id="newCupOut"></div></div>' +
       '<div class="sec"><h2>Something wrong?</h2>' +
         '<button class="btn ' + (sw.yuzuOut ? "cream" : "ghost") + '" id="yuzuBtn">' + (sw.yuzuOut ? "Yuzu is back in stock" : "Yuzu sold out") + "</button>" +
-        '<p class="sub">' + (sw.yuzuOut ? "On: the 2-goal prize is now " + esc(alt) + ". Yuzu prizes already given still work." : "Turns the 2-goal prize into " + esc(alt) + ".") + "</p>" +
+        '<p class="sub">' + (sw.yuzuOut ? "On: the 2-goal prize is now " + esc(alt) + ". Someone shows an older yuzu prize: give " + esc(alt) + " instead." : "Turns the 2-goal prize into " + esc(alt) + ".") + "</p>" +
         '<button class="btn ' + (sw.paused ? "cream" : "ghost") + '" id="pauseBtn">' + (sw.paused ? "Restart the game" : "Pause the game") + "</button>" +
         '<p class="sub">' + (sw.paused ? "Paused: the game page says \"short break\". Prizes already given still work." : "Pausing stops new rounds. Prizes already given still work.") + " Keep selling, then WhatsApp Vin or Kai.</p></div>" +
       '<div class="sec"><h3>What staff do</h3><ul class="sub" style="padding-left:18px;display:flex;flex-direction:column;gap:6px">' +
         "<li><b>Each paid drink:</b> hand over one cup card with it. Prize drinks get no card.</li>" +
-        "<li><b>Someone shows a prize:</b> hold \"Staff: hold to redeem\" on their phone until it turns grey USED. One prize per order.</li>" +
+        "<li><b>Someone shows a prize:</b> hold \"Staff: hold to redeem\" on their phone, then wait for ✓ confirmed (no tick after 10 seconds: type their code above). One prize per order.</li>" +
         "<li><b>A rude name on the wall:</b> tap Hide, or take all names off.</li>" +
+        "<li><b>Last 20 minutes:</b> no new games (Fri/Sat after 9:40pm, Sun after 5:40pm). Fri/Sat cup cards still work the next day; on Sunday after 5:40pm give no card.</li>" +
+        "<li><b>Closing:</b> match \"Prizes used today\" with the till.</li>" +
         "<li><b>Wall screen:</b> open …/shootout/wall/ on the projector, press Sound on and Full screen.</li></ul>" +
         '<button class="smallbtn" id="logout" style="align-self:flex-start">Log out</button></div>';
     const rc = $("#rCode"); rc.value = keep || ""; if (hadFocus) rc.focus();

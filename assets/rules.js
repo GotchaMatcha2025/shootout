@@ -13,7 +13,8 @@ const HF = (() => { try { return new Intl.DateTimeFormat("en-US", { timeZone: "A
 const toMs = x => typeof x === "number" ? x : Date.parse(x);
 const hr = ms => HF ? HF.format(new Date(ms)).replace(":00", "").replace(/[\s\u202f]+/g, "").toLowerCase() : clock(ms);
 function renderRules(c){
-  const Z = c.prizes, tens = c.odds.goalChance.map(p => Math.round(p * 10));
+  const Z = c.prizes, cb = c.odds.cornerBonus != null ? c.odds.cornerBonus : 0.5;
+  const range = g => Math.max(0, Math.floor(g * (1 - cb / 2) * 10)) + "–" + Math.min(10, Math.ceil(Math.min(0.985, g * (1 + cb / 2)) * 10)) + " in 10";
   const cap = s => s.toLowerCase().replace(/^./, x => x.toUpperCase());
   const who = esc(CONFIG.company.name) + (CONFIG.company.legal ? " (" + esc(CONFIG.company.legal) + ")" : "");
   $("#rulesDoc").innerHTML =
@@ -25,10 +26,10 @@ function renderRules(c){
     '<div class="card"><h2>How to play</h2><ul>' +
       "<li>Anyone can play. Pick a nickname. We don't ask for your name, phone number or email.</li>" +
       "<li><b>Free shot:</b> 1 a day on each phone.</li>" +
-      "<li><b>Buy a drink:</b> you get a cup card that unlocks 3 shots. One card per paid drink. Each card works once.</li>" +
+      "<li><b>Buy a drink:</b> you get a cup card that unlocks 3 shots. One card per paid drink (a trio is 3 drinks). Each card works once, on one phone.</li>" +
     "</ul></div>" +
     '<div class="card"><h2>How shots are decided</h2>' +
-      "<p>A shot that misses the goal or hits the post doesn't score. A shot on target has a set chance of beating the keeper: about " + tens[0] + " in 10 on shot 1, " + tens[1] + " in 10 on shot 2 and " + tens[2] + " in 10 on shot 3 (the free shot is like shot 1). Corners score more often than the middle. Our server decides each shot. It's a game of skill and chance.</p></div>" +
+      "<p>A shot that misses the goal or hits the post or bar doesn't score. A shot on target has a set chance of beating the keeper: " + range(c.odds.goalChance[0]) + " on shot 1, " + range(c.odds.goalChance[1]) + " on shot 2 and " + range(c.odds.goalChance[2]) + " on shot 3 (the free shot is like shot 1). The middle is hardest, the corners easiest. Our server decides each shot. It's a game of skill and chance.</p></div>" +
     '<div class="card"><h2>Prizes</h2>' +
       '<div class="tbl"><table><thead><tr><th>Your result</th><th>Prize</th></tr></thead><tbody>' +
         "<tr><td>Free shot, goal or miss</td><td>" + esc(Z.free.what + " " + Z.free.sub) + "</td></tr>" +
@@ -42,7 +43,7 @@ function renderRules(c){
         "<li>Staff mark the prize as used on your phone.</li>" +
       "</ul></div>" +
     '<div class="card"><h2>Names on the big screen</h2><p>Only hat-trick names go on the big screen. Keep it friendly: rude names are blocked, and staff remove any name.</p>' +
-      "<h2>Your data</h2><p>We keep your nickname and your shots until 30 Nov 2026, then delete them. Your phone keeps your open prize and today's free shot, so a reload doesn't lose them.</p>" +
+      "<h2>Your data</h2><p>We keep your nickname, your shots and a random id your phone makes (no name, number or email) until 30 Nov 2026, then delete them; backups clear within 30 days after that. To stop abuse we count tries per network using a scrambled code of your network address, kept for at most a day. Your phone keeps your open prize and today's free shot, so a reload doesn't lose them.</p>" +
       "<h2>Questions</h2><p>Ask us at the booth. We gotcha.</p></div>" +
     '<p><a href="../">← Back to the game</a></p>';
 }

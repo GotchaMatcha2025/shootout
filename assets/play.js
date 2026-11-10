@@ -13,7 +13,7 @@ const SGT_DAY = (() => { try { return new Intl.DateTimeFormat("en-GB", { timeZon
 const sgtDate = ms => new Date(ms + 8 * 3600e3).toISOString().slice(0, 10);
 const opensText = at => { const t = typeof at === "number" ? at : Date.parse(at); if (!t) return ""; return (SGT_DAY ? SGT_DAY.format(new Date(t)) : "") + ", " + clock(t); };
 const normCup = s => String(s || "").toUpperCase().replace(/[\s-]+/g, "");
-const KEY = { round: "shootout:round", device: "shootout:device", cup: "shootout:cup", nick: "shootout:nick", free: "shootout:freeday" };
+const KEY = { round: NS + "round", device: NS + "device", cup: NS + "cup", nick: "shootout:nick", free: NS + "freeday" };
 
 const Play = {
   st: null, idx: 0, busy: false, timer: 0, poll: 0, saving: false, starting: false, cfg: null, beat: 0,
@@ -54,6 +54,12 @@ const Play = {
     this.cup = Store.get(KEY.cup) || null;
     window.addEventListener("resize", sizeApp); sizeApp();
     document.addEventListener("visibilitychange", () => { if (!document.hidden){ this.loadConfig(); this.checkPrize(); } else Sfx.bedStop(); });
+    // another tab of this browser used the prize: show it here at once (review B1)
+    window.addEventListener("storage", e => {
+      if (e.key !== KEY.round || !this.st || !this.st.prize) return;
+      const v = Store.get(KEY.round);
+      if (v && v.round && v.round.id === this.st.round.id && v.prize){ this.st = v; this.tickPrize(); this.renderAgain(); }
+    });
     this.resume();
     this.loadConfig();
     setInterval(() => { if (!this.st) this.loadConfig(); }, 30000);
@@ -82,7 +88,8 @@ const Play = {
     const st = Store.get(KEY.round);
     this.st = st && st.round && Array.isArray(st.results) ? st : null;
     const now = Api.now();
-    if (this.st && this.st.prize && now < this.st.prize.expiresAt + CONFIG.graceMinutes * 60000){ this.showResult(); return; }
+    // a prize stays on screen (the card says if it ran out); only one hours past its time is cleared: a wrong phone clock can't wipe it (review M2)
+    if (this.st && this.st.prize && now < this.st.prize.expiresAt + CONFIG.graceMinutes * 60000 + 3 * 3600e3){ this.showResult(); return; }
     if (this.st && !this.st.prize && this.st.results.length === this.st.round.shots){ this.showResult(); return; }
     if (this.st && !this.st.prize && this.st.results.length < this.st.round.shots){ this.enterGame(true); return; }
     if (this.st) Store.del(KEY.round);
@@ -91,7 +98,7 @@ const Play = {
   showLanding(){
     clearInterval(this.timer); clearInterval(this.poll); clearInterval(this.beat); Sfx.bedStop();
     $("#result").hidden = true; $("#result").innerHTML = ""; $("#fallback").hidden = true; $("#landing").hidden = false; $("#hud").hidden = true;
-    this.pitch.inputOn = false; this.pitch.o.attract = true; this.pitch.reset(); this.pitch.attractT = 1; this.pitch.setCy(0.28);
+    this.pitch.paused = false; this.pitch.inputOn = false; this.pitch.o.attract = true; this.pitch.reset(); this.pitch.attractT = 1; this.pitch.setCy(0.28);
     this.renderLanding();
   },
   renderLanding(){
@@ -136,7 +143,7 @@ const Play = {
       if (c === "timeout" || c === "network"){ this.renderLanding(); this.showFallback(); return; }
       if (c === "free-used"){ Store.set(KEY.free, sgtDate(Api.now())); this.renderLanding(); return; }
       if (["paused", "closing", "closed", "later", "over", "stopped"].includes(c)){ if (this.cfg) this.cfg.status = c; else this.cfg = { status: c }; if (res.opensAt) this.cfg.opensAt = res.opensAt; this.renderLanding(); return; }
-      if (c === "unknown-cup" || c === "used-cup"){ this.cup = null; Store.del(KEY.cup); }
+      if (c === "unknown-cup" || c === "used-cup" || c === "card-in-use"){ this.cup = null; Store.del(KEY.cup); }
       this.renderLanding(); this.err(res.message || "Something went wrong. Try again."); vibrate(40); return;
     }
     const r = res.round;
@@ -148,7 +155,7 @@ const Play = {
   },
   enterGame(resumed){
     $("#landing").hidden = true; $("#fallback").hidden = true; $("#result").hidden = true; $("#hud").hidden = false;
-    this.pitch.o.attract = false; this.pitch.queue = []; this.pitch._auto = false; this.pitch.reset(); this.pitch.label = ""; this.pitch.setCy(0.40);
+    this.pitch.paused = false; this.pitch.o.attract = false; this.pitch.queue = []; this.pitch._auto = false; this.pitch.reset(); this.pitch.label = ""; this.pitch.setCy(0.40);
     this.idx = this.st.results.length; this.busy = false;
     Sfx.bed(1); if (!resumed) Sfx.play("whistle");
     this.armShot();
@@ -224,7 +231,7 @@ const Play = {
     const st = this.st, r = st.round, goals = st.results.filter(Boolean).length, P = CONFIG.prices, cat = this.catFor();
     clearInterval(this.beat);
     this.pitch.inputOn = false;
-    Sfx.bed(0.35);
+    Sfx.bedStop(); this.pitch.paused = true;   // the stadium stops drawing behind the prize screen (battery)
     const el = $("#result");
     el.innerHTML =
       '<div class="res-top"><img class="res-cat" src="assets/img/' + cat[0] + '" alt="' + esc(cat[1]) + '" width="96" height="100"><div>' +
@@ -236,7 +243,7 @@ const Play = {
         '<div class="prize-code" aria-label="Prize code" id="pCode">····</div><div class="prize-timer" id="prizeTimer"></div>' +
         '<div class="prize-rules">Today only · at the booth · with a new purchase<br>' + esc(CONFIG.prizeRules) + '</div><div class="stamp">USED</div><div class="prize-roll"><span class="ball"></span></div></div>' +
       '<p class="err" id="saveMsg" hidden></p>' +
-      '<button class="hold" id="holdBtn" hidden><span class="fill"></span><span class="t">Staff: hold to redeem</span></button>' +
+      '<button class="hold" id="holdBtn" hidden><span class="fill"></span><span class="t">Staff: hold to redeem · discount on green ✓</span></button>' +
       '<p class="booth">' + esc(CONFIG.copy.booth) + "</p>" +
       '<div class="again" id="again"></div>' +
       (r.mode === "free" ?
@@ -311,9 +318,11 @@ const Play = {
     const b = $("#holdBtn"); let tm = 0, stopTone = () => {};
     const down = e => {
       e.preventDefault(); if (b.dataset.done || !this.st || !this.st.prize) return;
+      const fresh = Store.get(KEY.round);   // another tab may have used it already (review B1)
+      if (fresh && fresh.round && fresh.round.id === this.st.round.id && (fresh.usedLocal || (fresh.prize && fresh.prize.redeemedAt))){ this.st = fresh; this.tickPrize(); return; }
       Sfx.unlock(); b.classList.add("on"); stopTone = Sfx.holdTone();
       tm = setTimeout(() => {
-        stopTone(); b.dataset.done = "1"; this.st.usedLocal = Api.now(); this.save();
+        stopTone(); b.dataset.done = "1"; this.st.usedLocal = Api.now(); this.st.holdId = randomId(16); this.save();
         Sfx.play("coin"); vibrate([40, 30, 80]); this.tickPrize(); this.sendRedeem(); this.renderAgain();
       }, 900);
     };
@@ -327,22 +336,34 @@ const Play = {
     // USED shows at once on the phone; the server is told in the background, again and again until it answers
     const code = this.st.prize.code, id = this.st.round.id;
     for (let i = 0; this.st && this.st.prize && this.st.prize.code === code; i++){
-      const r = await Api.post("/redeem", { round: id, code }, 6000);
-      if (r.ok || r.code === "already"){ if (this.st && this.st.prize && this.st.prize.code === code){ this.st.usedAck = true; this.st.prize.redeemedAt = r.redeemedAt || this.st.usedLocal; this.save(); } return; }
-      if (r.code !== "timeout" && r.code !== "network"){ $("#saveMsg").hidden = false; $("#saveMsg").textContent = r.message || "Ask staff to type the code."; return; }
+      const r = await Api.post("/redeem", { round: id, code, hold: this.st.holdId || undefined }, 6000);
+      if (r.ok || r.code === "already"){
+        if (!this.st || !this.st.prize || this.st.prize.code !== code) return;
+        // "already" from our own earlier try lands within seconds of this hold; one from long before = the prize was used elsewhere (review B1)
+        // "already" for this phone's own hold (a retry after a lost answer) = fine; any other hold or a staff redeem = used elsewhere
+        const mine = r.code !== "already" || (this.st.holdId && r.hold === this.st.holdId) || (r.hold === undefined && r.redeemedAt >= this.st.usedLocal - 15000);
+        if (!mine){ this.st.dupAt = r.redeemedAt || Api.now(); vibrate([200, 100, 200]); Sfx.play("groan"); }
+        this.st.usedAck = true; this.st.prize.redeemedAt = r.redeemedAt || this.st.usedLocal; this.save(); this.tickPrize(); return;
+      }
+      if (r.code !== "timeout" && r.code !== "network"){
+        if (this.st && this.st.prize && this.st.prize.code === code){ this.st.badRedeem = r.message || "Not valid."; this.save(); vibrate([200, 100, 200]); Sfx.play("groan"); this.tickPrize(); }
+        return;
+      }
       await sleep(3000);
     }
   },
   // the server's view every 10 s: a staff Undo or a redeem typed at the counter shows here
   async checkPrize(){
     if (!this.st || !this.st.prize || document.hidden) return;
-    const code = this.st.prize.code, r = await Api.post("/prize", { round: this.st.round.id }, 6000);
+    const code = this.st.prize.code, ackAtSend = this.st.usedAck, usedAtSend = this.st.usedLocal;
+    const r = await Api.post("/prize", { round: this.st.round.id }, 6000);
     if (!r.ok || !r.prize || !this.st || !this.st.prize || this.st.prize.code !== code) return;
     const srv = r.prize;
-    if (this.st.usedAck && !srv.redeemedAt){   // staff pressed Undo
-      this.st.usedLocal = 0; this.st.usedAck = false; this.st.prize.redeemedAt = null; this.save();
+    // an Undo only if the redeem was already confirmed when this check was sent (review G4)
+    if (ackAtSend && this.st.usedAck && this.st.usedLocal === usedAtSend && !srv.redeemedAt && !this.st.dupAt){   // staff pressed Undo
+      this.st.usedLocal = 0; this.st.usedAck = false; this.st.elsewhere = false; this.st.prize.redeemedAt = null; this.st.badRedeem = null; this.save();
       const b = $("#holdBtn"); if (b){ delete b.dataset.done; b.classList.remove("on"); }
-    } else if (srv.redeemedAt && !this.st.usedLocal){ this.st.usedLocal = srv.redeemedAt; this.st.usedAck = true; this.st.prize.redeemedAt = srv.redeemedAt; this.save(); }
+    } else if (srv.redeemedAt && !this.st.usedLocal){ this.st.usedLocal = srv.redeemedAt; this.st.usedAck = true; this.st.elsewhere = true; this.st.prize.redeemedAt = srv.redeemedAt; this.save(); }
     this.st.prize.expiresAt = srv.expiresAt || this.st.prize.expiresAt;
     this.tickPrize(); this.renderAgain();
   },
@@ -350,8 +371,24 @@ const Play = {
     if (!this.st || !this.st.prize || !$("#prizeCard")) return;
     const card = $("#prizeCard"), t = $("#prizeTimer"), hb = $("#holdBtn"), p = this.st.prize;
     const used = this.st.usedLocal || p.redeemedAt;
-    if (used){ card.classList.add("used"); t.innerHTML = "Redeemed at <b>" + clock(used) + "</b>"; if (hb) hb.hidden = true; return; }
-    card.classList.remove("used");
+    // the counter rule: only a green USED ✓ (the server said yes) earns the discount (adversarial review 1)
+    if (this.st.dupAt || this.st.badRedeem){
+      card.classList.add("used", "dup"); card.classList.remove("ok", "unsure"); if (hb) hb.hidden = true; t.className = "prize-timer dupmsg";
+      t.innerHTML = this.st.dupAt ? "ALREADY USED at <b>" + clock(this.st.dupAt) + "</b>. No discount." : "NOT VALID: " + esc(this.st.badRedeem) + " No discount.";
+      return;
+    }
+    if (used){
+      card.classList.add("used"); if (hb) hb.hidden = true;
+      // green only for a minute after a hold on THIS phone that the server confirmed: an old green screen can't be shown again later
+      const age = Api.now() - this.st.usedLocal, fresh = this.st.usedAck && !this.st.elsewhere && age < 60000, late = !this.st.usedAck && age > 5000;
+      card.classList.toggle("ok", fresh); card.classList.toggle("unsure", late);
+      t.className = "prize-timer" + (fresh ? " ok" : late ? " unsure" : "");
+      t.innerHTML = fresh ? "✓ Redeemed just now · confirmed"
+        : this.st.usedAck ? "Used at <b>" + clock(used) + "</b>"
+        : late ? "Not checked yet. Staff: type the code " + esc(p.code) + " on the staff page." : "Checking with our server…";
+      return;
+    }
+    card.classList.remove("used", "dup", "ok", "unsure");
     if (hb) hb.hidden = false;
     const left = p.expiresAt - Api.now(), graceLeft = left + CONFIG.graceMinutes * 60000;
     if (left > 0){ t.className = "prize-timer" + (left < 60000 ? " low" : ""); t.innerHTML = "Use within <b>" + mmss(left) + "</b>"; card.classList.remove("expired"); }

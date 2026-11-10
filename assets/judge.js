@@ -18,8 +18,9 @@
   // one shot: a = the assisted aim, r = the server's draw for this shot (a number in [0, 1))
   function judge(a, level, r, odds) {
     var ax = Math.abs(a.tx), ty = a.ty, P = GOAL.half, B = GOAL.bar, band = GOAL.ball + GOAL.post;
-    if (Math.abs(ax - P) <= band && ty < B + GOAL.ball) return { outcome: 'post', near: false };
-    if (Math.abs(ty - B) <= band && ax < P + GOAL.ball) return { outcome: 'bar', near: false };
+    // the post and bar bands meet at the corner, so a ball clipping the outside corner is woodwork, never a goal (adversarial review 10)
+    if (Math.abs(ax - P) <= band && ty < B + band) return { outcome: 'post', near: false };
+    if (Math.abs(ty - B) <= band && ax < P + band) return { outcome: 'bar', near: false };
     if (ax > P + band) return { outcome: 'wide', near: ax - P < 0.75 };
     if (ty > B + band) return { outcome: 'over', near: ty - B < 0.7 };
     var corner = Math.min(1, Math.pow(ax / P, 1.3) * 0.75 + Math.min(1, ty / B) * 0.25);
@@ -53,26 +54,34 @@
   }
 
   /* nickname filter: the server runs the same check and has the last word. English, Singlish/Hokkien, Malay, Tamil, pinyin
-     abbreviations, racial slurs and leet spellings (review flaw 4). Real names that contain a bad part on purpose are allowed below. */
-  var BAD_PARTS = ['fuck', 'fuk', 'fck', 'shit', 'bitch', 'cunt', 'pussy', 'asshole', 'bastard', 'slut', 'whore', 'nigg', 'faggot', 'porn', 'penis',
-    'vagina', 'hitler', 'nazi', 'kanina', 'kannina', 'chibai', 'cheebye', 'chebye', 'nabei', 'nabeh', 'lanjiao', 'lanjiu', 'lanciao', 'pukimak',
-    'pundek', 'puki', 'butoh', 'lancau', 'tamade', 'caonima', 'shabi', 'wocao', 'jibai', 'pantat', 'knnb', 'ccb', 'niama', 'fcuk', 'phuk', 'fuq',
-    'fack', 'burit', 'pundai', 'keling', 'kotek', 'chink', 'dildo', 'boob', 'horny', 'nude', 'jerkoff', 'wank', 'retard', 'molest'];
-  var BAD_WORDS = ['cb', 'knn', 'lj', 'sb', 'nmsl', 'kns', 'fk', 'cao', 'diu', 'dick', 'ass', 'tmd', 'wtf', 'stfu', 'babi', 'sial', 'bodoh', 'sex',
-    'rape', 'kill', 'cnm', 'kote', 'otha', 'nnb', 'paki', 'negro', 'nig', 'fag', 'hoe', 'cum', 'anal', 'cock', 'tits', 'cibai'];
+     abbreviations, racial slurs, compounds and leet spellings (review flaw 4; code review G2). Real names that contain a bad part
+     (DICKSON, HANCOCK, CUMMINGS…) are taken out by ALLOW before the parts are checked. */
+  var BAD_PARTS = ['fuck', 'fuk', 'fck', 'phuck', 'shit', 'shyt', 'bitch', 'cunt', 'pussy', 'pussi', 'asshole', 'asshat', 'dumbass', 'jackass',
+    'bastard', 'slut', 'whore', 'nigg', 'faggot', 'fagg', 'porn', 'penis', 'vagina', 'vagin', 'hitler', 'nazi', 'dick', 'dikhead', 'bigcock',
+    'cocksuck', 'mycock', 'suckmy', 'tits', 'titt', 'titie', 'cumshot', 'cumslut', 'rapist', 'analsex', 'sexy', 'boner', 'kanina', 'kannina',
+    'chibai', 'cheebye', 'chebye', 'nabei', 'nabeh', 'lanjiao', 'lanjiu', 'lanciao', 'pukimak', 'pundek', 'puki', 'butoh', 'lancau', 'tamade',
+    'caonima', 'shabi', 'wocao', 'jibai', 'pantat', 'knnb', 'ccb', 'chaocb', 'niama', 'fcuk', 'phuk', 'fuq', 'fack', 'burit', 'pundai',
+    'keling', 'kotek', 'chink', 'dildo', 'boob', 'horny', 'nude', 'jerkoff', 'wank', 'retard', 'molest', 'kimak', 'thevidiya', 'thevdiya',
+    'thevidya', 'pondan', 'bapok', 'kafir', 'kkk', 'siegheil', 'pedo', 'tetek', 'pepek', 'jilat', 'sundal', 'paria', 'pariah'];
+  var BAD_WORDS = ['cb', 'knn', 'lj', 'sb', 'nmsl', 'kns', 'fk', 'cao', 'diu', 'ass', 'tmd', 'wtf', 'stfu', 'babi', 'sial', 'bodoh', 'sex',
+    'rape', 'kill', 'cnm', 'kote', 'otha', 'nnb', 'paki', 'negro', 'nig', 'niga', 'nigas', 'fag', 'fags', 'hoe', 'cum', 'anal', 'cock', 'cibai', 'kys', 'heil', 'isis'];
+  var ALLOW = ['dickson', 'dickens', 'dickinson', 'dickie', 'hancock', 'peacock', 'babcock', 'hitchcock', 'woodcock', 'cockburn', 'cummings',
+    'scunthorpe', 'matsushita'];
   function checkName(raw) {
     var name = String(raw == null ? '' : raw).replace(/\s+/g, ' ').trim();
     if (!name) return { ok: false, why: 'Type a nickname first.' };
     if (name.length > 12) return { ok: false, why: '12 letters at most.' };
     if (!/^[A-Za-z0-9 _.\-]+$/.test(name)) return { ok: false, why: 'Letters and numbers only, please.' };
+    if (/1488/.test(name)) return { ok: false, why: "Pick another name. That one won't go on the big screen." };
     var leet = name.toLowerCase().replace(/0/g, 'o').replace(/1/g, 'i').replace(/3/g, 'e').replace(/4/g, 'a').replace(/5/g, 's')
       .replace(/7/g, 't').replace(/8/g, 'b').replace(/\$/g, 's').replace(/@/g, 'a');
-    var joined = leet.replace(/[^a-z]/g, '');
-    var squeezed = joined.replace(/(.)\1+/g, '$1');
     var tokens = leet.split(/[^a-z]+/).filter(Boolean);
+    // an allowed real name counts only as a whole word: BIG DICKSON passes, BIGDICKSON doesn't
+    var joined = tokens.map(function (t) { return ALLOW.indexOf(t) >= 0 ? '-' : t; }).join('');
+    var squeezed = joined.replace(/(.)\1+/g, '$1');
     var bad = BAD_PARTS.some(function (w) { return joined.indexOf(w) >= 0 || squeezed.indexOf(w) >= 0; }) ||
       tokens.some(function (t) { return BAD_WORDS.indexOf(t) >= 0 || BAD_WORDS.indexOf(t.replace(/(.)\1+/g, '$1')) >= 0; }) ||
-      BAD_WORDS.indexOf(joined) >= 0;
+      BAD_WORDS.indexOf(joined.replace(/-/g, '')) >= 0;
     if (bad) return { ok: false, why: "Pick another name. That one won't go on the big screen." };
     return { ok: true, name: name.toUpperCase() };
   }

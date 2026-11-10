@@ -333,22 +333,26 @@ const Play = {
     b.addEventListener("keyup", up);
   },
   async sendRedeem(){
-    // USED shows at once on the phone; the server is told in the background, again and again until it answers
+    // the phone shows "checking" at once; the server is asked again and again until it answers. Only the server's yes turns it green.
     const code = this.st.prize.code, id = this.st.round.id;
     for (let i = 0; this.st && this.st.prize && this.st.prize.code === code; i++){
       const r = await Api.post("/redeem", { round: id, code, hold: this.st.holdId || undefined }, 6000);
       if (r.ok || r.code === "already"){
         if (!this.st || !this.st.prize || this.st.prize.code !== code) return;
-        // "already" from our own earlier try lands within seconds of this hold; one from long before = the prize was used elsewhere (review B1)
-        // "already" for this phone's own hold (a retry after a lost answer) = fine; any other hold or a staff redeem = used elsewhere
-        const mine = r.code !== "already" || (this.st.holdId && r.hold === this.st.holdId) || (r.hold === undefined && r.redeemedAt >= this.st.usedLocal - 15000);
-        if (!mine){ this.st.dupAt = r.redeemedAt || Api.now(); vibrate([200, 100, 200]); Sfx.play("groan"); }
+        // "already" for this phone's own hold (a retry after a lost answer) = confirmed; staff typed the code after this hold (the phone
+        // was amber) = used, shown grey; another phone's hold, or a redeem from before this hold = red, no discount (review B1)
+        const ownRetry = r.code !== "already" || (this.st.holdId && r.hold === this.st.holdId);
+        const byStaffAfter = !ownRetry && !r.hold && r.redeemedAt >= this.st.usedLocal - 2000;
+        if (!ownRetry && !byStaffAfter){ this.st.dupAt = r.redeemedAt || Api.now(); vibrate([200, 100, 200]); Sfx.play("groan"); }
+        if (byStaffAfter) this.st.elsewhere = true;
         this.st.usedAck = true; this.st.prize.redeemedAt = r.redeemedAt || this.st.usedLocal; this.save(); this.tickPrize(); return;
       }
-      if (r.code !== "timeout" && r.code !== "network"){
+      // only "expired" and "not found" mean the prize isn't valid; a passing server error keeps retrying (amber after 5 s) (re-check)
+      if (r.code === "expired" || r.code === "not-found"){
         if (this.st && this.st.prize && this.st.prize.code === code){ this.st.badRedeem = r.message || "Not valid."; this.save(); vibrate([200, 100, 200]); Sfx.play("groan"); this.tickPrize(); }
         return;
       }
+      if (r.code === "bad-input") return;   // our own bug, not the customer's: stays amber, staff type the code
       await sleep(3000);
     }
   },

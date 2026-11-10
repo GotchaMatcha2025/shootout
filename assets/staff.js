@@ -128,7 +128,7 @@ const Staff = {
     this.codeDraft = ""; this.msgOk = !!r.ok; this.lastCode = r.ok ? code : "";
     const p = r.prize || {};
     this.msg = r.ok ? "✓ " + esc(code) + " redeemed: " + esc(p.what) + " (" + esc(p.sub) + ")" + (r.late ? ". It was in the 15-minute grace." : "")
-      : r.code === "already" ? esc(code) + " was already used at " + clock(r.redeemedAt) + "."
+      : r.code === "already" ? (r.hold && Api.now() - r.redeemedAt < 120000 ? esc(code) + " was used by their phone just now (" + clock(r.redeemedAt) + "). That counts: one discount." : esc(code) + " was already used at " + clock(r.redeemedAt) + ". No discount.")
       : r.code === "expired" ? esc(code) + " ran out at " + clock(r.expiresAt) + ", and the grace time is over."
       : r.code === "not-found" ? "No prize with the code " + esc(code) + "." : esc(r.message || "No signal. Try again.");
     this.render(); this.refresh();

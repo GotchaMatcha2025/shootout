@@ -88,6 +88,42 @@ test('featured match: a leftover frame after end never replaces it; a fresh matc
   assert.equal(WC.snapKind({ endAt: 9 }, null, { st: 0, tl: 60000, p: last.p }), 'new');
   assert.equal(WC.snapKind({ endAt: 9 }, null, { st: 1, tl: 30000, p: last.p }), 'skip');
 });
+test('bottom strip: real counts only; each part hidden when unknown or zero', () => {
+  assert.equal(WC.countsLine({ goals: 128, beaten: 7 }), '⚽ 128 TODAY   🤖 BEATEN 7×');
+  assert.equal(WC.countsLine({ goals: 128, beaten: 0 }), '⚽ 128 TODAY');
+  assert.equal(WC.countsLine({ goalsToday: 3, botBeaten: 1 }), '⚽ 3 TODAY   🤖 BEATEN 1×');
+  assert.equal(WC.countsLine({ beaten: 2 }), '🤖 BEATEN 2×');
+  for (const m of [null, {}, { goals: 0 }, { goals: '12' }, { goals: -3, beaten: NaN }, { t: 'wall', live: [] }]) assert.equal(WC.countsLine(m), '', JSON.stringify(m));
+});
+test('flashes: at most one big flash every 1.6 s', () => {
+  assert.equal(WC.flashOk(5000, 0), true);
+  assert.equal(WC.flashOk(5000, 3500), false);
+  assert.equal(WC.flashOk(5100, 3500), true);
+});
+test('slow motion: 0.3× up to the goal frame, then catch up at 2.5×, never ahead of 100 ms behind', () => {
+  const target = 10000;
+  assert.equal(WC.playClock(null, target, 16, null), target);                 // first frame
+  assert.equal(WC.playClock(5000, target, 16, null), target);                 // far behind: jump
+  assert.equal(WC.playClock(target, target, 16, 10050), target);             // never ahead of the target
+  assert.equal(WC.playClock(9950, target, 20, 9990), 9956);                   // slow: 20 ms of real time = 6 ms of play
+  assert.equal(WC.playClock(9988, target, 20, 9990), 9990);                   // stops at the goal frame
+  assert.equal(WC.playClock(9800, target, 20, null), 9850);                   // then catches up at 2.5×
+  assert.equal(WC.playClock(9990, target, 20, null), target);
+  assert.equal(WC.playClock(9200, target, 20, 9990), 9250);                   // a goal far ahead (lag ≥ 700 ms): no more slow motion
+});
+test('goal ahead: the first buffered frame within 400 ms whose score is higher than the drawn one', () => {
+  const f = (t, sc) => ({ t, s: { sc } }), buf = [f(100, [0, 0]), f(133, [0, 0]), f(166, [1, 0]), f(199, [1, 0])];
+  assert.equal(WC.goalAhead(buf, 120, [0, 0]), 166);
+  assert.equal(WC.goalAhead(buf, 170, [1, 0]), null);
+  assert.equal(WC.goalAhead(buf, 120, null), null);
+  assert.equal(WC.goalAhead([f(900, [1, 0])], 100, [0, 0]), null);           // more than 400 ms ahead
+});
+test('the GOAL banner: hand-drawn word + the line under it', () => {
+  assert.deepEqual(WC.splitCheer('GOAL! TEAM MATCHA'), { big: 'GOAL!', sub: 'TEAM MATCHA' });
+  assert.deepEqual(WC.splitCheer('GOAL! BOT BEATEN'), { big: 'GOAL!', sub: 'BOT BEATEN' });
+  assert.deepEqual(WC.splitCheer('MATCHA BOT WINS'), { big: 'MATCHA BOT WINS', sub: '' });
+  assert.deepEqual(WC.splitCheer('GOAL!'), { big: 'GOAL!', sub: '' });
+});
 test('scorer: the team whose drawn score went up', () => {
   assert.equal(WC.scorer([0, 0], [1, 0]), 0);
   assert.equal(WC.scorer([1, 2], [1, 3]), 1);

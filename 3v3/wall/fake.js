@@ -1,7 +1,7 @@
 /* Test only (loaded by wall.js when ?api=fake): a fake server feed with the wall messages of API-3V3.md §3/§7/§10, made with Sim3.
    It alternates a 2 v 2, a 1 v the Matcha Bot and a 1 v 1, with 0–40 ms of arrival jitter, then idles so the demo shows.
    ?fake=nostart drops the `start` messages (a wall that joins mid-match); ?fake=drop closes the socket every 25 s.
-   Each match re-sends its `start` after 5 s (as after a reconnect); in 2 v 2 a seat turns BOT (`bt`) after 10 s (a dropped player). */
+   ?fake=nocounts leaves out today's counts. Each match re-sends its `start` after 5 s (as after a reconnect); in 2 v 2 a seat turns BOT (`bt`) after 10 s (a dropped player). */
 (function () {
   "use strict";
   var q = location.search;
@@ -24,7 +24,7 @@
     function loop() {
       if (dead) return;
       var now = Date.now();
-      if (now - wallT > 2000) { wallT = now; send({ t: "wall", lobby: null, live: m ? ["M" + id] : [] }); }
+      if (now - wallT > 2000) { wallT = now; send({ t: "wall", now: now, live: m ? ["M" + id] : [], closed: 0, goals: /nocounts/.test(q) ? undefined : 120 + id * 3, beaten: /nocounts/.test(q) ? undefined : id > 1 ? id - 1 : 0 }); }
       if (!m) { if (now - idle > 6000) begin(); return; }
       var ev = Sim.step(m, 1 / 60).concat(Sim.step(m, 1 / 60));
       ev.forEach(function (e) {

@@ -1,5 +1,6 @@
-/* Gotcha Shootout 3v3: the staff phone at the booth. PIN → a day token (this tab only); type the customer's code → the server's answer;
-   hold 1.5 s to redeem. Green only on the server's yes. No names anywhere. Contract: scratchpad/3v3/API-3V3.md §4, §9.6, §10. */
+/* Gotcha Shootout: the staff phone at the booth. PIN → a day token (kept on this phone until 04:00 SGT); type the customer's code → the
+   server's answer; hold 1.5 s to redeem. Green only on the server's yes. Booth controls: Pause / Restart, bot Easier / Normal / Harder.
+   No names anywhere. Contract: scratchpad/3v3/API-3V3.md §4, §9.6, §10; review fixes 12 Nov (#5, #6, #13). */
 "use strict";
 var StaffCore = (function () {
   var ALPHA = "ACDEFHJKMNPQRTUVWXY34679";
@@ -35,7 +36,14 @@ var StaffCore = (function () {
     if (r.size === 1 || r.size === 2) return r.size + " v " + r.size + ": " + w;
     return (r.md == null ? "" : "Multiplayer: ") + w;
   }
-  function prizeLine(p) { return p && p.label ? "Prize: " + p.label : "Prize: not set yet"; }
+  // why a code has no prize (the server's `why`): known codes in shop words, anything else shown as sent (short)
+  var WHY = { cap: "used today", day: "used today", dev: "used today", phone: "used today", net: "used today", "used-today": "used today",
+    hours: "outside booth hours", lost: "lost game", lose: "lost game", draw: "draw", local: "offline game", offline: "offline game", unset: "not set yet", none: "not set yet" };
+  function whyText(why) { return why == null || why === "" ? "" : WHY[why] || String(why).slice(0, 40); }
+  function prizeLine(p, why) {
+    if (p && p.label) return "Prize: " + p.label;
+    return why ? "No prize · " + whyText(why) : "Prize: not set yet";
+  }
   // how old the code is, for the 30-minute limit staff see (the server still refuses an old code itself)
   function ago(at, now) {
     if (typeof at !== "number" || typeof now !== "number") return "";
@@ -51,10 +59,15 @@ var StaffCore = (function () {
     if (res.status === 503) return { tone: "warn", head: "Not set up yet", lines: ["Tell Vin or Kai."], retry: true };
     if (!res.ok) return { tone: "warn", head: "No answer, try again", retry: true };
     var head = res.r === "win" ? "WIN" : res.r === "lose" ? "LOSE" : res.r === "draw" ? "DRAW" : "?";
-    var lines = [modeText(res), "Played at " + clock(res.at) + ago(res.at, now), prizeLine(off ? null : res.prize)];
-    var v = { tone: "info", head: head, lines: lines, offline: off, canRedeem: !res.used && !off };
+    off = off || res.local === 1 || res.local === true;
+    var prize = off ? null : res.prize, has = !!(prize && prize.label);
+    var lines = [modeText(res), "Played at " + clock(res.at) + ago(res.at, now), prizeLine(prize, off ? null : res.why)];
+    if (has && !res.used && typeof res.exp === "number") lines.push("Valid until " + clock(res.exp));
+    // the hold shows only when the server says this code carries a prize and isn't used (a no-prize code would only be refused)
+    var v = { tone: "info", head: head, lines: lines, offline: off, canRedeem: has && !res.used && !off };
     if (off) v.status = { tone: "warn", head: "Offline game · no prize" };
-    else if (res.used) { v.status = { tone: "bad", head: "ALREADY USED at " + clock(res.used) }; v.canRedeem = false; }
+    else if (res.used) v.status = { tone: "bad", head: "ALREADY USED at " + clock(res.used) };
+    else if (!has) v.status = { tone: "warn", head: "No prize" };
     else v.status = { tone: "info", head: "Not used yet" };
     return v;
   }
@@ -64,6 +77,7 @@ var StaffCore = (function () {
     if (!res || res.net) return { tone: "warn", head: "No answer, try again", lines: ["Don't give the prize yet."] };
     if (res.ok) return { tone: "ok", head: "✓ Redeemed", lines: [ctx.prize && ctx.prize.label ? "Give: " + ctx.prize.label : "Give the prize", "Used at " + clock(res.used)] };
     if (res.status === 409 && res.e === "expired") return { tone: "bad", head: "TOO OLD (over 30 min)", lines: ["Played at " + clock(res.at != null ? res.at : ctx.at), "No prize."] };
+    if (res.status === 409 && res.e === "no-prize") return { tone: "bad", head: "NO PRIZE", lines: [whyText(res.why || ctx.why) || "This code has no prize."] };
     if (res.status === 409) {
       var lines = ["No prize."];
       if (ctx.mine && typeof res.used === "number" && res.used >= ctx.mine - 5000) lines = ["Your last hold got no answer, but went through. Give the prize once if you haven't."];
@@ -86,8 +100,25 @@ var StaffCore = (function () {
     return [["Matches", n(c.matches)], ["Plays", n(c.humans != null ? c.humans : c.plays)], ["Won", n(c.wins)], ["Lost", n(c.losses)], ["Draws", n(c.draws)],
       ["Codes used", n(c.used != null ? c.used : c.codesUsed)]];
   }
-  return { ALPHA: ALPHA, BASES: BASES, pickMode: pickMode, clean: clean, clock: clock, ago: ago, modeText: modeText, checkView: checkView, redeemView: redeemView,
-    loginError: loginError, tiles: tiles };
+  // the token ends at 04:00 SGT (server rule); the phone forgets it then too, so the page opens on the PIN, not on a refused call
+  function expiry(now) {
+    var sg = now + 8 * 3600e3, d = new Date(sg), four = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 4) - 8 * 3600e3;
+    return four > now ? four : four + 24 * 3600e3;
+  }
+  // booth controls (review #5): the server's current values only; nothing is assumed before it answers
+  var LEVELS = [[0.8, "Easier"], [1, "Normal"], [1.2, "Harder"]];
+  function boothView(r) {
+    var c = r && r.settings ? r.settings : r || {};
+    var paused = typeof c.paused === "boolean" ? c.paused : c.paused === 1 ? true : c.paused === 0 ? false : null;
+    var lvl = typeof c.botLevel === "number" ? c.botLevel : null, name = null;
+    LEVELS.forEach(function (L) { if (lvl !== null && Math.abs(L[0] - lvl) < 0.001) name = L[1]; });
+    return { paused: paused, level: lvl, levelName: name,
+      status: paused === null ? "Game: ?" : paused ? "Game: PAUSED" : "Game: ON",
+      hold: paused === null ? "" : paused ? "Hold to restart the game" : "Hold to pause the game",
+      bot: lvl === null ? "Bot: ?" : "Bot: " + (name || lvl) };
+  }
+  return { ALPHA: ALPHA, BASES: BASES, pickMode: pickMode, clean: clean, clock: clock, ago: ago, whyText: whyText, modeText: modeText, checkView: checkView,
+    redeemView: redeemView, loginError: loginError, tiles: tiles, expiry: expiry, LEVELS: LEVELS, boothView: boothView };
 })();
 if (typeof module === "object" && module.exports) module.exports = StaffCore;
 
@@ -98,7 +129,7 @@ if (typeof window !== "undefined" && window.document) (function () {
   var mode = SC.pickMode(asked, saved, location.hostname, location.protocol), base = SC.BASES[mode];
   try { if (asked && SC.BASES[asked]) sessionStorage.setItem("s3v3:api", asked); } catch (e) { /* no session storage */ }
   var KEY = "s3v3:" + (mode === "live" ? "" : mode === "staging" ? "stg:" : mode + ":") + "staff";
-  if (mode === "fake") { var fs = document.createElement("script"); fs.src = "fake.js?v=1"; document.head.appendChild(fs); }
+  if (mode === "fake") { var fs = document.createElement("script"); fs.src = "fake.js?v=2"; document.head.appendChild(fs); }
 
   // one server call: {status, ...json} or {net:true} after `ms` (no answer = never green)
   function post(path, body, ms) {
@@ -113,8 +144,9 @@ if (typeof window !== "undefined" && window.document) (function () {
       .then(function (x) { clearTimeout(t); return x; });
   }
   var token = null, pin = "", busy = false, cur = null, lastNoAnswer = null, stateT = 0;
-  try { token = sessionStorage.getItem(KEY); } catch (e) { token = null; }
-  function store(t) { token = t; try { if (t) sessionStorage.setItem(KEY, t); else sessionStorage.removeItem(KEY); } catch (e) { /* this tab only */ } }
+  // the token lives on this phone until 04:00 SGT (review #13: a closed tab or a reload no longer needs the PIN again mid-shift)
+  try { var kept = JSON.parse(localStorage.getItem(KEY) || "null"); if (kept && kept.t && kept.until > Date.now()) token = kept.t; else localStorage.removeItem(KEY); } catch (e) { token = null; }
+  function store(t) { token = t; try { if (t) localStorage.setItem(KEY, JSON.stringify({ t: t, until: SC.expiry(Date.now()) })); else localStorage.removeItem(KEY); } catch (e) { /* memory only */ } }
   function out(path, body, ms) {   // a call with the token; a refused token sends staff back to the PIN
     body = body || {}; body.token = token;
     return post(path, body, ms).then(function (r) { if (r.status === 401 || r.status === 403) { logout("Type the PIN again."); r.loggedOut = true; } return r; });
@@ -178,7 +210,7 @@ if (typeof window !== "undefined" && window.document) (function () {
   }
   function redeem() {
     if (!cur || !cur.view || !cur.view.canRedeem) return;
-    var mine = cur, hold = $("#hold"), code = cur.code, ctx = { prize: cur.res.prize, at: cur.res.at, mine: lastNoAnswer && lastNoAnswer.code === code ? lastNoAnswer.at : 0 };
+    var mine = cur, hold = $("#hold"), code = cur.code, ctx = { prize: cur.res.prize, at: cur.res.at, why: cur.res.why, mine: lastNoAnswer && lastNoAnswer.code === code ? lastNoAnswer.at : 0 };
     hold.disabled = true; $("#holdT").textContent = "Checking…";
     var sent = Date.now();
     out("/staff/redeem", { code: code }, 5000).then(function (r) {
@@ -192,16 +224,49 @@ if (typeof window !== "undefined" && window.document) (function () {
       if (r.ok || r.status === 409) state();
     });
   }
-  // hold-to-redeem: 1.5 s of pressure, released early = nothing happens
-  function holdButton() {
-    var b = $("#hold"), t = 0;
-    function start(e) { if (b.disabled) return; if (e && e.preventDefault) e.preventDefault(); b.className = "hold on"; $("#holdT").textContent = "Keep holding…"; clearTimeout(t); t = setTimeout(function () { b.className = "hold done"; redeem(); }, 1500); }
-    function stop() { if (b.className === "hold on") { clearTimeout(t); b.className = "hold"; $("#holdT").textContent = "Hold 1.5 s to redeem"; } }
+  // hold-to-confirm (redeem, pause / restart): 1.5 s of pressure, released early = nothing happens
+  function makeHold(b, txt, idle, done) {
+    var t = 0;
+    function start(e) { if (b.disabled || b.hidden) return; if (e && e.preventDefault) e.preventDefault(); b.className = "hold on"; txt.textContent = "Keep holding…"; clearTimeout(t); t = setTimeout(function () { b.className = "hold done"; done(); }, 1500); }
+    function stop() { if (b.className === "hold on") { clearTimeout(t); b.className = "hold"; txt.textContent = idle(); } }
     if (window.PointerEvent) { b.addEventListener("pointerdown", start); ["pointerup", "pointerleave", "pointercancel"].forEach(function (e) { b.addEventListener(e, stop); }); }
     else { b.addEventListener("touchstart", start); b.addEventListener("touchend", stop); b.addEventListener("mousedown", start); b.addEventListener("mouseup", stop); b.addEventListener("mouseleave", stop); }
     b.addEventListener("keydown", function (e) { if ((e.key === " " || e.key === "Enter") && !e.repeat) start(e); });
     b.addEventListener("keyup", function (e) { if (e.key === " " || e.key === "Enter") stop(); });
     b.addEventListener("contextmenu", function (e) { e.preventDefault(); });
+  }
+
+  /* ---------- booth controls: Pause / Restart (hold), bot Easier / Normal / Harder; the server's values only ---------- */
+  var booth = SC.boothView(null);
+  function paintBooth(bv) {
+    booth = bv;
+    var st = $("#bStat"); st.textContent = bv.status; st.className = "bstat" + (bv.paused === null ? "" : bv.paused ? " warn" : " ok");
+    var pb = $("#pause"); pb.hidden = bv.paused === null; pb.className = "hold"; pb.disabled = false; $("#pauseT").textContent = bv.hold;
+    $("#bBot").textContent = bv.bot;
+    var bs = document.querySelectorAll("#levels button");
+    for (var i = 0; i < bs.length; i++) { var on = bv.level !== null && Math.abs(Number(bs[i].getAttribute("data-l")) - bv.level) < 0.001; bs[i].setAttribute("aria-pressed", on ? "true" : "false"); bs[i].disabled = false; }
+  }
+  function setting(body, what) {
+    var e = $("#bErr"); e.hidden = true;
+    what.textContent = "Saving…";
+    return out("/staff/settings", body, 6000).then(function (r) {
+      if (r.loggedOut) return;
+      if (!r.ok) { e.hidden = false; e.textContent = r.net ? "No answer, try again" : r.status === 404 ? "Not on the server yet" : "Didn't save, try again"; }
+      state();   // repaint from what the server now says, saved or not
+    });
+  }
+  function boothControls() {
+    makeHold($("#pause"), $("#pauseT"), function () { return booth.hold; }, function () {
+      if (booth.paused === null) return;
+      $("#pause").disabled = true; setting({ paused: !booth.paused }, $("#pauseT"));
+    });
+    var bs = document.querySelectorAll("#levels button");
+    for (var i = 0; i < bs.length; i++) bs[i].onclick = function () {
+      var l = Number(this.getAttribute("data-l"));
+      if (booth.level !== null && Math.abs(l - booth.level) < 0.001) return;
+      var all = document.querySelectorAll("#levels button"); for (var j = 0; j < all.length; j++) all[j].disabled = true;
+      setting({ botLevel: l }, $("#bBot"));
+    };
   }
 
   /* ---------- today's counts ---------- */
@@ -214,6 +279,7 @@ if (typeof window !== "undefined" && window.document) (function () {
         $("#tiles").innerHTML = "";
         SC.tiles(r).forEach(function (t) { var d = document.createElement("div"); d.className = "tile"; d.innerHTML = "<b></b><span></span>"; d.firstChild.textContent = t[1]; d.lastChild.textContent = t[0]; $("#tiles").appendChild(d); });
         $("#stale").hidden = true; $("#updated").textContent = "Updated " + SC.clock(Date.now());
+        paintBooth(SC.boothView(r));
       } else $("#stale").hidden = false;
       stateT = setTimeout(state, 15000);
     });
@@ -232,7 +298,8 @@ if (typeof window !== "undefined" && window.document) (function () {
     $("#next").onclick = reset;
     $("#retry").onclick = function () { if (cur) check(cur.code); };
     $("#logout").onclick = function () { logout(""); };
-    holdButton();
+    makeHold($("#hold"), $("#holdT"), function () { return "Hold 1.5 s to redeem"; }, redeem);
+    boothControls();
     document.addEventListener("visibilitychange", function () { if (!document.hidden && token) state(); });
     if (token) showMain();
   });

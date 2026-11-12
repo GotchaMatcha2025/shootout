@@ -54,6 +54,11 @@ p{margin:0}
 .tile{background:var(--card);border-radius:12px;padding:10px;display:flex;flex-direction:column;gap:4px}
 .tile b{font:900 26px/1 var(--font);font-variant-numeric:tabular-nums}
 .tile span{font:800 13px/1.2 var(--font);color:var(--muted)}
+.bstat{font:900 24px/1.1 var(--font)} .bstat.ok{color:var(--green)} .bstat.warn{color:var(--amber)}
+.seg{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.seg button{min-height:56px;border-radius:14px;border:2px solid #3b5a46;background:transparent;color:var(--cream);font:900 17px/1 var(--font);cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--cream);color:#0b1a10;border-color:var(--cream)}
+.seg button[disabled]{opacity:.6}
 .stale{background:#3a2a12;color:#ffd9a0;border-radius:12px;padding:10px 12px;font:800 14px/1.35 var(--font)}
 [hidden]{display:none!important}
 @media (prefers-reduced-motion:reduce){.hold.on .fill{transition-duration:0s}}
@@ -79,12 +84,20 @@ p{margin:0}
     <div class="status" id="status" hidden role="status"><div class="head" id="sHead"></div><div id="sLines"></div></div>
     <button class="hold" id="hold" type="button" hidden><span class="fill"></span><span class="t" id="holdT">Hold 1.5 s to redeem</span></button>
     <div class="row"><button class="btn" id="retry" type="button" hidden>Try again</button><button class="btn" id="next" type="button" hidden style="margin-left:auto">Next code</button></div>
+    <h2 style="margin-top:12px">Booth</h2>
+    <p class="bstat" id="bStat">Game: ?</p>
+    <button class="hold" id="pause" type="button" hidden><span class="fill"></span><span class="t" id="pauseT"></span></button>
+    <p class="sub">Pause = no new games.</p>
+    <p class="bstat" id="bBot">Bot: ?</p>
+    <div class="seg" id="levels" role="group" aria-label="Matcha Bot level"><button type="button" data-l="0.8" aria-pressed="false">Easier</button><button type="button" data-l="1" aria-pressed="false">Normal</button><button type="button" data-l="1.2" aria-pressed="false">Harder</button></div>
+    <p class="sub">Bot level = single player, from the next game.</p>
+    <p class="err" id="bErr" role="alert" hidden></p>
     <h2 style="margin-top:12px">Today</h2>
     <p class="stale" id="stale" hidden>No signal: these numbers may be old.</p>
     <div class="tiles" id="tiles"></div>
     <p class="sub"><span id="updated"></span> · Plays = people's games, not bots.</p>
   </section>
 </main>
-<script src="staff.js?v=1"></script>
+<script src="staff.js?v=2"></script>
 </body>
 </html>

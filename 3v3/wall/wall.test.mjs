@@ -56,6 +56,38 @@ test("cheers: single player uses the server's need; bot goals only restart play"
   assert.equal(WC.goalText(1, 0, [1, 0], 0, null, false).text, 'GOAL!');
   assert.equal(WC.timeUpText(1).text, 'MATCHA BOT WINS');
 });
+test('BOT label: the bt bitmask (bit team*size+slot) wins over start.bots', () => {
+  // 2 v 2: bit 3 = team 1 slot 1 (a bot holding a dropped player's seat); start said all four were people
+  const people = [[0, 0], [0, 0]];
+  assert.deepEqual([0, 1, 2, 3].map(i => WC.isBot(i, 2, 8, people)), [false, false, false, true]);
+  assert.deepEqual([0, 1, 2, 3].map(i => WC.isBot(i, 2, 0, [[1, 1], [1, 1]])), [false, false, false, false]);   // bt 0 = everyone a person
+  assert.deepEqual([0, 1].map(i => WC.isBot(i, 1, 2, null)), [false, true]);                                // 1 v Matcha Bot: bit 1
+  assert.deepEqual([0, 1, 2, 3].map(i => WC.isBot(i, 2, undefined, [[0, 1], [1, 0]])), [false, true, true, false]);   // no bt: start's bots
+  assert.equal(WC.isBot(0, 1, undefined, null), false);
+});
+test('sample carries the newest bt, so a seat that just turned BOT is labelled at once', () => {
+  const s1 = { st: 1, tl: 1000, gw: 28, md: 0, sc: [0, 0], bt: 0, b: [1, 1], p: [[1, 1], [2, 2]] }, s2 = Object.assign({}, s1, { bt: 2 });
+  assert.equal(WC.sample([{ t: 0, s: s1 }, { t: 33, s: s2 }], 10).bt, 2);
+});
+test('featured match: a re-sent start for the match on screen keeps it; another id or an ended match starts afresh', () => {
+  assert.equal(WC.sameMatch({ id: 'M1', endAt: 0 }, { t: 'start', id: 'M1' }), true);
+  assert.equal(WC.sameMatch({ id: 'M1', endAt: 0 }, { t: 'start', id: 'M2' }), false);
+  assert.equal(WC.sameMatch({ id: 'M1', endAt: 500 }, { t: 'start', id: 'M1' }), false);
+  assert.equal(WC.sameMatch(null, { id: 'M1' }), false);
+  assert.equal(WC.sameMatch({ id: null, endAt: 0 }, { id: null }), false);
+});
+test('featured match: a leftover frame after end never replaces it; a fresh match or another size does', () => {
+  const last = { st: 2, tl: 23000, p: [[0, 0], [1, 1], [2, 2], [3, 3]] }, sz2 = t => ({ st: 1, tl: t, p: last.p });
+  assert.equal(WC.snapKind(null, null, sz2(5000)), 'new');
+  assert.equal(WC.snapKind({ endAt: 0 }, last, sz2(22967)), 'add');
+  assert.equal(WC.snapKind({ endAt: 0 }, last, { st: 0, tl: 22000, p: last.p }), 'add');            // a single-player kick-off mid-match
+  assert.equal(WC.snapKind({ endAt: 0 }, last, sz2(60000)), 'new');                                  // the clock went back up: we missed its end
+  assert.equal(WC.snapKind({ endAt: 0 }, last, { st: 1, tl: 20000, p: [[0, 0], [1, 1]] }), 'new');   // another team size
+  assert.equal(WC.snapKind({ endAt: 9 }, last, { st: 4, tl: 23000, p: last.p }), 'skip');            // the ended match's last frame
+  assert.equal(WC.snapKind({ endAt: 9 }, last, { st: 0, tl: 60000, p: last.p }), 'new');             // the next match's countdown
+  assert.equal(WC.snapKind({ endAt: 9 }, null, { st: 0, tl: 60000, p: last.p }), 'new');
+  assert.equal(WC.snapKind({ endAt: 9 }, null, { st: 1, tl: 30000, p: last.p }), 'skip');
+});
 test('scorer: the team whose drawn score went up', () => {
   assert.equal(WC.scorer([0, 0], [1, 0]), 0);
   assert.equal(WC.scorer([1, 2], [1, 3]), 1);
@@ -63,7 +95,7 @@ test('scorer: the team whose drawn score went up', () => {
   assert.equal(WC.scorer(null, [1, 0]), -1);   // the first frame seen never cheers
 });
 
-// the stand-in engine (until 3v3/assets/sim.js ships): same API, seeded only
+// the real engine (3v3/assets/sim.js): same API, seeded only
 function loadStandin() {
   const ctx = { Math: Object.create(Math, { random: { value: () => { throw new Error('Math.random used'); } } }) };
   vm.createContext(ctx); vm.runInContext(fs.readFileSync(new URL('../assets/sim.js', import.meta.url), 'utf8'), ctx);

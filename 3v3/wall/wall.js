@@ -30,7 +30,7 @@ var WallCore = (function () {
     function pt(p, q) { return Math.abs(q[0] - p[0]) + Math.abs(q[1] - p[1]) > 12 ? [q[0], q[1]] : [lerp(p[0], q[0], k), lerp(p[1], q[1], k)]; }
     var p = [];
     for (var j = 0; j < B.p.length; j++) p.push(A.p[j] ? pt(A.p[j], B.p[j]) : B.p[j]);
-    return { st: A.st, tl: lerp(A.tl, B.tl, k), gw: lerp(A.gw, B.gw, k), md: B.md, sc: A.sc, b: pt(A.b, B.b), p: p };
+    return { st: A.st, tl: lerp(A.tl, B.tl, k), gw: lerp(A.gw, B.gw, k), md: B.md, sc: A.sc, bt: B.bt, b: pt(A.b, B.b), p: p };
   }
   // what the wall shouts when the drawn score changes or time runs out. Versus: first goal wins. Single player: the human team wins at the
   // server's `need` (or when the server ends the match on that goal, st 2); the bot's goals only restart play
@@ -41,6 +41,24 @@ var WallCore = (function () {
     return { text: "GOAL!", party: true, end: false };
   }
   function timeUpText(md) { return isSolo(md) ? { text: "MATCHA BOT WINS", party: false, end: true } : { text: "DRAW", party: false, end: true }; }
+  // BOT label: the snapshot's `bt` bitmask wins (bit team*size+slot; it also marks a bot holding a dropped player's seat), else start's bots
+  function isBot(i, size, bt, bots) {
+    if (typeof bt === "number") return (bt & (1 << i)) !== 0;
+    var team = i < size ? 0 : 1, slot = i % size;
+    return !!(bots && bots[team] && bots[team][slot]);
+  }
+  // what a snapshot means for the featured match: "add" to it, "new" = another match, "skip" = a leftover frame of a finished one.
+  // The server holds the featured match until it ends (review #7), so after `end` only a clearly fresh match (a full clock or another
+  // team size) replaces it; the finish (cheer + 3 s hold) is never cut short by the last frame of the match that just ended.
+  function snapKind(F, last, m) {
+    var n = m && m.p ? m.p.length : 0;
+    if (!F) return "new";
+    var other = !!(last && last.p.length !== n), fresh = !!(last ? m.tl > last.tl + 1500 : false) || (m.st === 0 && m.tl >= 59000);
+    if (F.endAt) return other || fresh ? "new" : "skip";
+    return other || (last && m.tl > last.tl + 1500) ? "new" : "add";   // we missed its end: the clock went back up
+  }
+  // a `start` for the match already on screen (re-sent after a reconnect) keeps it: same buffer, no flash of the demo, no stale cheer
+  function sameMatch(F, m) { return !!(F && m && m.id != null && F.id === m.id && !F.endAt); }
   // the team whose score went up between two drawn frames (-1 = none)
   function scorer(prev, cur) {
     if (!prev || !cur) return -1;
@@ -49,7 +67,7 @@ var WallCore = (function () {
     return -1;
   }
   return { TEAM: TEAM, BASES: BASES, pickMode: pickMode, wsUrl: wsUrl, backoff: backoff, isSolo: isSolo, modeLabel: modeLabel,
-    sample: sample, goalText: goalText, timeUpText: timeUpText, scorer: scorer };
+    sample: sample, goalText: goalText, isBot: isBot, sameMatch: sameMatch, snapKind: snapKind, timeUpText: timeUpText, scorer: scorer };
 })();
 if (typeof module === "object" && module.exports) module.exports = WallCore;
 
@@ -75,7 +93,7 @@ if (typeof window !== "undefined" && window.document) (function () {
   mode = WC.pickMode(asked, saved, location.hostname, location.protocol);
   try { if (asked && WC.BASES[asked]) sessionStorage.setItem("s3v3:api", asked); } catch (e) { /* no session storage */ }
   base = WC.BASES[mode];
-  if (mode === "fake") { var fs = document.createElement("script"); fs.src = "fake.js?v=1"; document.head.appendChild(fs); }
+  if (mode === "fake") { var fs = document.createElement("script"); fs.src = "fake.js?v=2"; document.head.appendChild(fs); }
 
   /* ---------- state ---------- */
   var S = { online: false, closed: false, F: null, demo: null, demoAcc: 0, view: null, prevSc: null, prevSt: -1,
@@ -97,7 +115,7 @@ if (typeof window !== "undefined" && window.document) (function () {
   function connect() {
     clearTimeout(timer);
     var Sock = mode === "fake" ? window.FakeSocket : window.WebSocket;
-    if (!Sock) { timer = setTimeout(connect, 300); return; }   // fake.js still loading
+    if (!Sock) { if (mode === "fake") timer = setTimeout(connect, 300); return; }   // fake.js still loading; no WebSocket at all = demo only
     try { ws = new Sock(WC.wsUrl(base)); } catch (e) { ws = null; retry(); return; }
     var me = ws;
     ws.onopen = function () { if (me !== ws) return; lastMsg = Date.now(); };
@@ -119,11 +137,15 @@ if (typeof window !== "undefined" && window.document) (function () {
   function onMsg(m) {
     var now = performance.now();
     if (m.t === "wall") { if (m.closed != null) S.closed = !!m.closed; return; }   // the heartbeat; GET / is the closed switch's main source
-    if (m.t === "start") { S.F = newFeatured(m); S.F.lastAt = now; S.prevSc = null; S.prevSt = -1; S.cel = null; S.trail = []; return; }
+    if (m.t === "start") {
+      // the server holds the featured match until it ends (review #7); the same match again only refreshes its seats
+      if (WC.sameMatch(S.F, m)) { if (m.cats) S.F.cats = m.cats; if (m.bots) S.F.bots = m.bots; if (m.md != null) S.F.md = m.md; if (typeof m.need === "number") S.F.need = m.need; return; }
+      S.F = newFeatured(m); S.F.lastAt = now; S.prevSc = null; S.prevSt = -1; S.cel = null; S.trail = []; return;
+    }
     if (m.t === "s") {
-      var F = S.F, n = m.p ? m.p.length : 0, last = F && F.buf.length ? F.buf[F.buf.length - 1].s : null;
-      // snapshots after an end, a different team size or a clock that went back up = another match the server now features
-      if (!F || F.endAt || (last && (last.p.length !== n || m.tl > last.tl + 1500))) { S.F = F = newFeatured({ md: m.md }); S.prevSc = null; S.prevSt = -1; S.cel = null; S.trail = []; }
+      var F = S.F, last = F && F.buf.length ? F.buf[F.buf.length - 1].s : null, kind = WC.snapKind(F, last, m);
+      if (kind === "skip") return;
+      if (kind === "new") { S.F = F = newFeatured({ md: m.md }); S.prevSc = null; S.prevSt = -1; S.cel = null; S.trail = []; }
       if (F.md == null && m.md != null) F.md = m.md;
       F.buf.push({ t: now, s: m }); F.lastAt = now;
       while (F.buf.length > 40) F.buf.shift();
@@ -136,6 +158,7 @@ if (typeof window !== "undefined" && window.document) (function () {
   /* ---------- closed switch (§9.5): GET / every 30 s; failures change nothing ---------- */
   function health() {
     if (mode === "fake") { S.closed = /[?&]fake=closed/.test(qs); return; }
+    if (!window.fetch) return;   // an old TV browser without fetch keeps the demo (review #12)
     var ctl = window.AbortController ? new AbortController() : null, t = setTimeout(function () { if (ctl) ctl.abort(); }, 5000);
     fetch(base + "/?v=1", { cache: "no-store", credentials: "omit", signal: ctl ? ctl.signal : undefined })
       .then(function (r) { return r.json(); }).then(function (j) { if (j && typeof j === "object") S.closed = j.closed === true; })
@@ -258,10 +281,10 @@ if (typeof window !== "undefined" && window.document) (function () {
     g.fillStyle = "#1b2a20"; g.beginPath(); g.arc(b[0] + 0.2, b[1], 0.45, 0, 7); g.fill();
     g.beginPath(); g.arc(b[0] - 0.7, b[1] - 0.6, 0.25, 0, 7); g.fill(); g.beginPath(); g.arc(b[0] - 0.5, b[1] + 0.75, 0.25, 0, 7); g.fill();
   }
-  function drawPlayers(p, cats, bots) {
+  function drawPlayers(p, cats, bots, bt) {
     var size = p.length / 2;
     p.forEach(function (q, i) {
-      var team = i < size ? 0 : 1, slot = i % size, cat = cats && cats[team] ? cats[team][slot] : null, bot = bots && bots[team] ? !!bots[team][slot] : false;
+      var team = i < size ? 0 : 1, slot = i % size, cat = cats && cats[team] ? cats[team][slot] : null, bot = WC.isBot(i, size, bt, bots);
       g.save(); g.translate(q[0], q[1]); g.rotate(-Math.PI / 2);   // faces upright on the landscape screen
       g.fillStyle = "rgba(0,0,0,.33)"; g.beginPath(); g.arc(0.5, 0.9, RP * 0.9, 0, 7); g.fill();
       var fc = cat == null ? null : face(cat, team);
@@ -278,7 +301,7 @@ if (typeof window !== "undefined" && window.document) (function () {
   function render(v, info, dt) {
     var L = pitchLayer(v.gw);
     g.setTransform(1, 0, 0, 1, 0, 0); g.drawImage(L, 0, 0);
-    world(g); drawBall(v.b); drawPlayers(v.p, info.cats, info.bots);
+    world(g); drawBall(v.b); drawPlayers(v.p, info.cats, info.bots, info.live ? v.bt : undefined);
     g.setTransform(k, 0, 0, k, 0, 0); g.textBaseline = "middle";
     var fs = CH * 0.055, big = "400 " + Math.round(fs * 1.15) + "px 'Bowlby One', Impact, sans-serif", body = "900 " + Math.round(fs) + "px Nunito, sans-serif";
     // scoreboard: team names (or Player / Matcha Bot), the score when live, the clock in the middle
@@ -395,8 +418,10 @@ if (typeof window !== "undefined" && window.document) (function () {
   window.addEventListener("DOMContentLoaded", function () {
     cv = $("#wall"); g = cv.getContext("2d");
     if (mode !== "live") { var tg = $("#test"); tg.hidden = false; tg.textContent = mode === "fake" ? "FAKE FEED" : "TEST SERVER"; }
-    controls(); fit(); window.addEventListener("resize", fit);
-    connect(); health(); setInterval(health, 30000);
-    requestAnimationFrame(frame);
+    requestAnimationFrame(frame);   // the picture first: nothing below may leave the screen black (review #12)
+    try { controls(); } catch (e) { /* the buttons are extras */ }
+    window.addEventListener("resize", fit);
+    connect();
+    if (window.fetch) { health(); setInterval(health, 30000); }
   });
 })();

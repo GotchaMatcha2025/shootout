@@ -105,7 +105,7 @@ const Wall = {
     $("#wOrder").hidden = !show.length;
     $("#wMore").textContent = total > show.length && show.length ? show.length + " newest of " + total : "";
     $("#wCount").innerHTML = "<b>" + (c.shots || 0) + "</b> shots today · <b>" + (c.hatTricks || 0) + "</b> hat trick" + (c.hatTricks === 1 ? "" : "s");
-    $("#wDeal").innerHTML = "Trio " + money(CONFIG.prices.trio) + " · 2 matcha + 1 yuzu <s>" + money(CONFIG.trioWas()) + "</s>";
+    $("#wDeal").textContent = "Matcha from " + money(CONFIG.prices.matcha) + " · 3 for " + money(CONFIG.prices.trio);   // the OCBC menu words
     $("#wNet").classList.toggle("off", !this.online);
     $("#wNet span").textContent = this.online ? (Api.test ? "test server" : "live") : "reconnecting";
     const fixed = this.statusLine(); if (fixed && $("#wHead").textContent !== fixed) $("#wHead").textContent = fixed;

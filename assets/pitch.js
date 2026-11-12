@@ -17,7 +17,7 @@ const Loop = {
 
 const GOAL = J.GOAL;
 const KIT = { shirt: "#BE6E4A", shirtDark: "#9b5638", shorts: "#1d2c23", skin: "#c58c5f", hair: "#1a120c", glove: "#F5F0E5", sock: "#F5F0E5" };
-const AD_TEXT = () => "GOTCHA MATCHA  ·  WE GOTCHA  ·  MATCHA " + money(CONFIG.prices.matcha) + "  ·  TRIO " + money(CONFIG.prices.trio) + "  ·  ";
+const AD_TEXT = () => "GOTCHA MATCHA  ·  WE GOTCHA  ·  MATCHA FROM " + money(CONFIG.prices.matcha) + "  ·  3 FOR " + money(CONFIG.prices.trio) + "  ·  ";
 function sprite(w, h, paint){ const c = document.createElement("canvas"); c.width = Math.max(1, Math.round(w)); c.height = Math.max(1, Math.round(h)); paint(c.getContext("2d"), c.width, c.height); return c; }
 
 class Pitch {

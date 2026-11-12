@@ -17,17 +17,17 @@ function renderRules(c){
   // lowest = dead centre on the ground; highest = the best on-target corner (corner value ≈ 0.94 once the post and bar bands are taken out)
   const range = g => Math.round(g * (1 - cb / 2) * 10) + "–" + Math.round(Math.min(0.985, g * (1 - cb / 2 + cb * 0.938)) * 10) + " in 10";
   const cap = s => s.toLowerCase().replace(/^./, x => x.toUpperCase());
-  const who = esc(CONFIG.company.name) + (CONFIG.company.legal ? " (" + esc(CONFIG.company.legal) + ")" : "");
+  const who = esc(CONFIG.company.legal || CONFIG.company.name), trio = "3 for " + money(CONFIG.prices.trio);   // GRA: the organiser by its registered name
   $("#rulesDoc").innerHTML =
     '<p class="eyebrow">GOTCHA SHOOTOUT</p><h1>Rules</h1>' +
     (Api.test ? '<p class="staff-stale">TEST SERVER: this page shows the test settings.</p>' : "") +
-    '<div class="card"><h2>Who runs it</h2><p>' + who + ", at our booth at the " + esc(CONFIG.where) + ".</p>" +
+    '<div class="card"><h2>Who runs it</h2><p>Run by ' + who + ", at our booth at the " + esc(CONFIG.where) + ".</p>" +
       "<h2>When</h2><p>" + c.windows.map(w => { const o = toMs(w.opens), e = toMs(w.closes); return (DAYF ? DAYF.format(new Date(o)) : "") + ": " + hr(o) + "–" + hr(e); }).join("<br>") +
       "<br>New games stop " + c.stopBeforeCloseMinutes + " minutes before closing.</p></div>" +
     '<div class="card"><h2>How to play</h2><ul>' +
       "<li>Anyone can play. Pick a nickname. We don't ask for your name, phone number or email.</li>" +
       "<li><b>Free shot:</b> 1 a day on each phone.</li>" +
-      "<li><b>Buy a drink:</b> you get a cup card that unlocks 3 shots. One card per paid drink (a trio is 3 drinks). Each card works once, on one phone.</li>" +
+      "<li><b>Buy a drink:</b> you get a cup card that unlocks 3 shots. One card per paid drink (a " + trio + " is 3 drinks). Each card works once, on one phone.</li>" +
     "</ul></div>" +
     '<div class="card"><h2>How shots are decided</h2>' +
       "<p>A shot that misses the goal or hits the post or bar doesn't score. A shot on target has a set chance of beating the keeper: " + range(c.odds.goalChance[0]) + " on shot 1, " + range(c.odds.goalChance[1]) + " on shot 2 and " + range(c.odds.goalChance[2]) + " on shot 3 (the free shot is like shot 1). The middle is hardest, the corners easiest. Our server decides each shot. It's a game of skill and chance.</p></div>" +
@@ -40,6 +40,7 @@ function renderRules(c){
       "</tbody></table></div><ul>" +
         "<li>Use your prize today at the booth, with a new purchase, within " + c.prizeMinutes + " minutes (staff allow " + c.graceMinutes + " more at the counter).</li>" +
         "<li>" + esc(CONFIG.prizeRules) + " Not exchangeable for cash.</li>" +
+        "<li>Free matcha = the cheapest matcha in your order (not one in a " + trio + ").</li>" +   // as the OCBC till takes it off
         "<li>If sparkling yuzu sells out, the 2-goal prize becomes " + esc(Z.yuzuOut.what + " " + Z.yuzuOut.sub) + ".</li>" +
         "<li>Staff mark the prize as used on your phone.</li>" +
       "</ul></div>" +
@@ -52,6 +53,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   document.body.classList.add("docpage");
   renderRules(RULES_DEFAULT);
   const r = await Api.post("/config", {}, 6000);
+  if (r.ok && r.prices) CONFIG.prices = r.prices;
   if (r.ok) renderRules({ windows: r.windows && r.windows.length ? r.windows : RULES_DEFAULT.windows, odds: r.odds || RULES_DEFAULT.odds,
     stopBeforeCloseMinutes: r.stopBeforeCloseMinutes || 20, prizeMinutes: r.prizeMinutes || 15, graceMinutes: r.graceMinutes || 15, prizes: r.prizes || RULES_DEFAULT.prizes });
 });

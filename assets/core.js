@@ -7,8 +7,8 @@ const CONFIG = {
   address: "https://gotchamatcha2025.github.io/shootout/",   // printed on the banner (11 Nov 2026): never move
   addressShort: "gotchamatcha2025.github.io/shootout",
   where: "OCBC Arena / Kallang Wave Mall event",
-  company: { name: "Gotcha Matcha", legal: "" },             // registered name + UEN: owner to send (rules page shows them once filled)
-  prices: { matcha: 7, yuzu: 5, trio: 15 },
+  company: { name: "Gotcha Matcha", legal: "Gotcha Matcha Pte Ltd (UEN 202435893D)" },   // GRA: the rules name the organiser (DECISIONS 12 Nov ~11:30)
+  prices: { matcha: 6, yuzu: 5, trio: 16 },   // the OCBC menu (DECISIONS 12 Nov ~12:45): matcha = the cheapest one, yuzu = either sparkling tea, trio = "3 for $16"
   prizeMinutes: 15, graceMinutes: 15, stopBeforeCloseMinutes: 20,
   headlines: [
     "Hat trick = a free matcha with your next drink.",
@@ -32,7 +32,10 @@ const CONFIG = {
   },
   prizeRules: "One prize per order. Prize drinks don't get a cup card. One cup card per paid drink."
 };
-CONFIG.trioWas = () => CONFIG.prices.matcha * 2 + CONFIG.prices.yuzu;
+// the menu rows (no-go page + after a free shot), in one place; "from": matcha has 4 prices and the server sends the cheapest
+CONFIG.menuRows = () => { const P = CONFIG.prices;
+  return "<div><span>Matcha</span><span>from " + money(P.matcha) + "</span></div><div><span>Sparkling tea</span><span>" + money(P.yuzu) + "</span></div>" +
+    "<div><span>Latte + Strawberry Latte +\u00a0sparkling</span><span>3 for " + money(P.trio) + "</span></div>"; };   // no-break space: a 375 px phone breaks before "+ sparkling"
 
 /* ---------- helpers ---------- */
 const $ = (s, r = document) => r.querySelector(s);

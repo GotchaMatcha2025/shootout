@@ -121,9 +121,7 @@ const Play = {
   },
   showFallback(){
     // the automatic no-go page: the server didn't answer twice
-    const P = CONFIG.prices;
-    $("#fbMenu").innerHTML = "<div><span>Matcha drinks</span><span>" + money(P.matcha) + "</span></div><div><span>Sparkling yuzu</span><span>" + money(P.yuzu) + "</span></div>" +
-      "<div><span>Trio · 2 matcha + 1 yuzu</span><span><s>" + money(CONFIG.trioWas()) + "</s>" + money(P.trio) + "</span></div>";
+    $("#fbMenu").innerHTML = CONFIG.menuRows();
     $("#landing").hidden = true; $("#fallback").hidden = false;
   },
   async start(){
@@ -228,7 +226,7 @@ const Play = {
     return ["matcha-deprived-cream.webp", "A matcha-deprived cat"];
   },
   showResult(){
-    const st = this.st, r = st.round, goals = st.results.filter(Boolean).length, P = CONFIG.prices, cat = this.catFor();
+    const st = this.st, r = st.round, goals = st.results.filter(Boolean).length, cat = this.catFor();
     clearInterval(this.beat);
     this.pitch.inputOn = false;
     Sfx.bedStop(); this.pitch.paused = true;   // the stadium stops drawing behind the prize screen (battery)
@@ -248,10 +246,7 @@ const Play = {
       '<p class="booth">' + esc(CONFIG.copy.booth) + "</p>" +
       '<div class="again" id="again"></div>' +
       (r.mode === "free" ?
-        '<div class="cta"><h3>' + esc(CONFIG.copy.afterFree) + '</h3><div class="menu">' +
-          "<div><span>Matcha drinks</span><span>" + money(P.matcha) + "</span></div>" +
-          "<div><span>Sparkling yuzu</span><span>" + money(P.yuzu) + "</span></div>" +
-          "<div><span>Trio · 2 matcha + 1 yuzu</span><span><s>" + money(CONFIG.trioWas()) + "</s>" + money(P.trio) + "</span></div></div>" +
+        '<div class="cta"><h3>' + esc(CONFIG.copy.afterFree) + '</h3><div class="menu">' + CONFIG.menuRows() + "</div>" +
           '<p class="win">With 3 shots: <b>2 goals</b> = free sparkling yuzu with your next matcha · <b>3 goals</b> = free matcha with your next drink + your name in the Hall of Fame · 0–1 goals = $1 off.</p></div>' : "") +
       '<div class="foot"><a href="rules/">Rules</a><span>We gotcha 💚</span></div>';
     this.countDots();

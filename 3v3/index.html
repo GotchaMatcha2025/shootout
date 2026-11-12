@@ -6,115 +6,105 @@
 <meta name="theme-color" content="#07110b">
 <meta name="robots" content="noindex">
 <title>Gotcha Shootout</title>
-<meta name="description" content="Finger football at the Gotcha Matcha booth: beat the Matcha Bot, or play 1 v 1 and 2 v 2 with friends.">
+<meta name="description" content="Finger football at the Gotcha Matcha booth.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800;900&family=Bowlby+One&display=swap">
 <link rel="stylesheet" href="assets/3v3.css?v=1">
 </head>
 <body>
+<!-- Screens, ids and words = mock-up rev 4 (owner yes to rev 3 ~20:52 + "fewest words", DECISIONS 12 Nov). The skin lives in 3v3.css only. -->
 <main class="app" id="app">
   <button class="sbtn" id="soundBtn" aria-pressed="true" aria-label="Sound on">🔊</button>
 
-  <!-- 1 home -->
   <section class="scr" id="s-home">
     <canvas class="bgpitch" id="bgpitch" aria-hidden="true"></canvas>
     <img class="logo" src="../assets/img/logo-lockup-white.webp" alt="Gotcha Matcha" width="132" height="40">
-    <h1 class="title">SHOOT<br>OUT<small>FINGER FOOTBALL</small></h1>
-    <p class="lede">Like air hockey.<br>Your finger is your player.</p>
+    <h1 class="title">SHOOT<br>OUT<small>3 V 3</small></h1>
     <div class="spacer"></div>
-    <button class="btn" id="goPlay">Play ⚽</button>
-    <a class="lnk" href="rules/">Rules</a>
+    <button class="btn" id="goJoin">▶ Play</button>
+    <a class="small lnk" href="rules/">Rules</a>
   </section>
 
-  <!-- 2 join step: Telegram OR Instagram (owner 12 Nov ~20:20) -->
   <section class="scr" id="s-join" hidden>
-    <h2 class="h2" style="margin-top:20px">Join to play</h2>
-    <p class="lede" style="font-size:16px">Join our Telegram<br>or follow our Instagram.</p>
+    <h2 class="h2">Join to play</h2>
     <div class="step">
-      <a class="btn tg" id="jTg" target="_blank" rel="noopener">Join our Telegram</a>
-      <a class="btn ig" id="jIg" target="_blank" rel="noopener">Follow us</a>
-      <p class="small" id="jState" aria-live="polite">Tap one. It opens in a new tab.</p>
+      <a class="btn y" id="tgJoin" target="_blank" rel="noopener">✈️ Telegram</a>
+      <a class="btn ghost" id="igJoin" target="_blank" rel="noopener">📷 Instagram</a>
     </div>
+    <p class="err" id="tgErr" role="alert" hidden>Tap one first</p>
     <div class="spacer"></div>
-    <button class="btn" id="jNext" disabled>Play →</button>
+    <button class="btn" id="goPick">▶ Play</button>
   </section>
 
-  <!-- 3 cat -->
   <section class="scr" id="s-pick" hidden>
     <h2 class="h2">Pick your cat</h2>
     <div class="cards" id="cards"></div>
-    <div class="spacer"></div>
-    <button class="btn" id="pNext" disabled>Next →</button>
   </section>
 
-  <!-- 4 how to play: every way on one screen -->
-  <section class="scr" id="s-how" hidden>
-    <h2 class="h2">How to play?</h2>
-    <button class="btn" id="hSolo">Single player · vs the Matcha Bot</button>
-    <p class="small" id="hSoloSub" style="margin-top:-6px"></p>
-    <div class="step" id="hMulti">
-      <h3>Multiplayer · with friends</h3>
-      <p class="small">New game</p>
-      <div class="teams"><button class="btn y" id="hNew1">1 v 1</button><button class="btn y" id="hNew2">2 v 2</button></div>
-      <p class="small">Join a game</p>
-      <form class="teams" id="hJoinForm" autocomplete="off">
-        <input class="code-in" id="hCode" maxlength="4" inputmode="text" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="CODE" aria-label="Game code (4 letters)">
-        <button class="btn y" id="hJoin" type="submit">Join</button>
-      </form>
-      <p class="err" id="hErr" role="alert" hidden></p>
+  <section class="scr" id="s-mode" hidden>
+    <button class="mode" id="mSolo"><b>🤖 VS BOT</b><span id="mSoloSub">1 goal wins</span></button>
+    <button class="mode" id="mMulti"><b>👥 FRIENDS</b><span id="mMultiSub">1 v 1 · 2 v 2</span></button>
+  </section>
+
+  <section class="scr" id="s-multi" hidden>
+    <h2 class="h2">Code</h2>
+    <form class="row" id="joinForm" autocomplete="off">
+      <input class="codein" id="codeIn" maxlength="4" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="CODE" aria-label="Game code">
+      <button class="btn y" id="joinGo" type="submit">Join</button>
+    </form>
+    <p class="err" id="codeErr" role="alert" hidden>Wrong code</p>
+    <h2 class="h2">New game</h2>
+    <div class="teams">
+      <button class="team m" id="n1">1 V 1</button>
+      <button class="team m" id="n2">2 V 2</button>
     </div>
-    <p class="err" id="hRest" hidden>Multiplayer is resting. Try single player.</p>
     <div class="spacer"></div>
-    <button class="lnk" id="hCat">Change cat</button>
+    <button class="btn ghost" id="multiBack" aria-label="Back">↩</button>
   </section>
 
-  <!-- 5 room (friends, by code) -->
-  <section class="scr" id="s-room" hidden>
-    <p class="small" style="margin-top:6px;letter-spacing:1.4px">GAME CODE · <span id="rSize"></span></p>
-    <div class="count" id="rCode">----</div>
-    <p class="lede" style="font-size:16px;margin-top:-6px">Tell your friends this code</p>
-    <div class="slots" id="rSeats"></div>
-    <p class="chal" id="rState" aria-live="polite"></p>
+  <section class="scr" id="s-lobby" hidden>
+    <p class="small" id="roomKind">1 V 1</p>
+    <div class="count" id="lCount">----</div>
+    <p class="small" id="roomHint">Share this code</p>
+    <div class="slots" id="slots"></div>
     <div class="spacer"></div>
-    <button class="btn ghost" id="rLeave">Leave</button>
+    <p class="small" id="roomFoot">Tap to swap</p>
+    <button class="btn" id="startGo" hidden>▶ Start</button>
+    <button class="btn ghost" id="leaveGo">Leave</button>
   </section>
 
-  <!-- 6 match -->
   <section class="scr" id="s-match" hidden>
-    <canvas id="pitch" aria-label="Football pitch. Your finger is your player: move it to hit the ball into the goal at the top."></canvas>
+    <canvas id="pitch" aria-label="Football pitch. Your finger is your player: move it to hit the ball into the goal."></canvas>
     <div class="hud"><span class="tchip m" id="hudA">MATCHA</span><span class="tchip yz" id="hudB">YUZU</span><span class="clock" id="clock">60</span></div>
     <div class="banner" id="banner"></div>
-    <div class="hint" id="hint">Your finger is your player · hit it ↑</div>
+    <div class="hint" id="hint" aria-label="Drag your player"><span class="fing">👆</span> ↑</div>
     <div class="flash" id="flash"></div>
   </section>
 
-  <!-- 7 result -->
   <section class="scr" id="s-result" hidden>
-    <p class="small" id="xEyebrow" style="margin-top:8px;letter-spacing:1.4px">FULL TIME</p>
-    <h2 class="big" id="xTitle">YOU WIN!</h2>
-    <p class="lede" id="xLede" style="font-size:16px"></p>
-    <div class="prize" id="prize">
-      <span class="k" id="pK">Your prize</span>
-      <span class="v" id="pV">Show this at the booth</span>
+    <h2 class="big" id="rTitle">WIN!</h2>
+    <p class="small" id="rEyebrow">1 – 0</p>
+    <div class="prize" id="prize" hidden>
+      <span class="v" id="pV">PRIZE</span>
       <span class="code" id="pCode">------</span>
-      <span class="used" id="pUsed" hidden></span>
-      <span class="s" id="pS">Show staff at the booth</span>
+      <span class="s" id="pS">Redeem at the counter</span>
     </div>
     <div class="spacer"></div>
-    <button class="btn" id="xAgain">Rematch</button>
-    <button class="btn ghost" id="xBack">Back</button>
-    <a class="lnk" id="xIg" target="_blank" rel="noopener">Follow us on Instagram</a>
+    <button class="btn" id="again">↻ Again</button>
+    <button class="btn ghost" id="back" aria-label="Back">↩</button>
   </section>
 
-  <!-- kill switch / no server -->
+  <!-- kill switch / no server (CTO G1 §9.5) -->
   <section class="scr" id="s-rest" hidden>
     <img class="logo" src="../assets/img/logo-lockup-white.webp" alt="Gotcha Matcha" width="132" height="40">
-    <h2 class="h2" style="margin-top:24px">The game is resting</h2>
-    <p class="lede" style="font-size:16px">Back soon. Meanwhile:</p>
-    <div class="links"><a class="btn tg" id="restTg" target="_blank" rel="noopener">Telegram</a><a class="btn ig" id="restIg" target="_blank" rel="noopener">Instagram</a></div>
+    <h2 class="h2">The game is resting</h2>
+    <div class="step">
+      <a class="btn y" id="restTg" target="_blank" rel="noopener">✈️ Telegram</a>
+      <a class="btn ghost" id="restIg" target="_blank" rel="noopener">📷 Instagram</a>
+    </div>
     <div class="spacer"></div>
-    <button class="btn ghost" id="restRetry">Try again</button>
+    <button class="btn ghost" id="restRetry" aria-label="Try again">↻</button>
   </section>
 
   <div class="pill" id="pill" hidden>Reconnecting…</div>

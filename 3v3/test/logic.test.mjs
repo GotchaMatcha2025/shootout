@@ -63,7 +63,8 @@ test('reconnect backoff: 300 ms doubling to a 3 s cap', () => {
 });
 
 test('game codes: upper case, letters and digits, 4 long; goal words', () => {
-  assert.equal(L.cleanCode(' k7-m4x '), 'K7M4'); assert.equal(L.cleanCode('none'), 'NONE');
+  assert.equal(L.cleanCode(' k7-m4x '), 'K7M4'); assert.equal(L.cleanCode('nOne'), 'NNE', 'O and letters outside the alphabet are dropped');
+  assert.equal(L.cleanCode('s1il'), '', 'S, 1, I, L never reach the server');
   assert.equal(L.goals(1), '1 goal'); assert.equal(L.goals(2), '2 goals');
 });
 

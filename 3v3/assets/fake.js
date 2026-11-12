@@ -1,13 +1,14 @@
 /* Gotcha Shootout 3v3 — a server inside the page, speaking the real messages (API-3V3.md §3, §10) with Sim3. Two jobs:
    1. ?api=fake: test and demo with no network (solo vs the Matcha Bot, rooms filled by fake friends, error codes, drops).
    2. Plan B (§8): when the real-time server can't be reached, single player runs here and only the code comes from POST /solo.
-   Test codes for ?api=fake: join NONE → "no-room", FULL → "room-full", GONE → "started"; any other code joins a room (?size=2 for 2 v 2). */
+   Test codes for ?api=fake: join NNNN → "no-room", FFFF → "room-full", XXXX → "started"; any other code joins a room (?size=2 for 2 v 2). */
 "use strict";
 const Fake = (() => {
   const Q = new URLSearchParams(location.search), FAKE = Net.mode === "fake";
   const LAG = FAKE ? Math.max(0, +(Q.get("lag") || 45)) : 0;          // one-way delay in ms (?lag=)
   const SKEW = FAKE ? 2345 : 0;                                        // a wrong phone clock on purpose: the countdowns must still be right
   const FRIENDS = Q.get("friends") !== "0", SOLO_SIZE = +(Q.get("solo") || 1) === 3 ? 3 : 1;
+  const PRIZE = Q.get("prize") === "1" ? { win: "TEST FREE MATCHA", lose: "TEST $1 OFF", draw: "TEST $1 OFF" } : null;   // ?prize=1: labels as staging TEST
   const need = () => (globalThis.Sim3 && Sim3.C.CHALLENGE_GOALS) || 1;   // one goal beats the Matcha Bot (owner 12 Nov ~20:34, §11)
   const ABC = "ACDEFHJKMNPQRTUVWXY34679", now = () => Date.now() + SKEW, S = () => globalThis.Sim3;
   const code = n => { let c = ""; for (let i = 0; i < n; i++) c += ABC[Math.floor(Math.random() * ABC.length)]; return c; };
@@ -43,13 +44,14 @@ const Fake = (() => {
   /* rooms (§10): you + fake friends who sit down one by one; full → 5 s countdown */
   function newRoom(size, cat, host, c){
     const seats = [[], []]; for (let t = 0; t < 2; t++) for (let s = 0; s < size; s++) seats[t].push(null);
-    room = { code: c || code(4), size, seats, you: null, k: null, rm: {}, timer: 0, used: false };
-    if (host) seats[0][0] = { cat: (cat + 1) % 4, h: 1, f: 1 };
+    room = { code: c || code(4), size, seats, you: null, k: null, rm: {}, timer: 0, used: false, makerMe: !host };
+    if (host) seats[0][0] = { cat: (cat + 1) % 4, h: 1, f: 1, mk: 1 };
     sit(cat); out(roomMsg()); if (FRIENDS) fill(); checkFull();
   }
   function sit(cat, team, slot){
     const r = room; if (r.you) r.seats[r.you.team][r.you.slot] = null;
     if (team === undefined) [team, slot] = pickSeat();
+    const other = r.seats[team][slot]; if (other && r.you) r.seats[r.you.team][r.you.slot] = other;   // a taken seat swaps you both (§12.2)
     r.seats[team][slot] = { cat, h: 1, me: 1 }; r.you = { team, slot };
   }
   // auto-balance: the emptier team (Matcha on a tie), its first free seat
@@ -62,14 +64,19 @@ const Fake = (() => {
       room.seats[t][s] = { cat: (i + 2) % 4, h: 1, f: 1 }; out(roomMsg()); checkFull();
     }, 1400 * (i + 1)));
   }
-  function checkFull(){
+  // full room: the game maker taps Start (§12.2); a fake host who made the room taps it 1.5 s later
+  function checkFull(){ if (room && !room.k && !free().length && !room.makerMe){ const id = room.code; setTimeout(() => { if (room && room.code === id) go(); }, 1500); } }
+  function go(){
     if (!room || room.k || free().length) return;
     room.k = now() + 5000; out(roomMsg()); const id = room.code;
     room.timer = setTimeout(() => { if (room && room.code === id && room.k) startMatch(false); }, 5000);
   }
   function roomMsg(){
-    const seats = room.seats.map(col => col.map(s => s && (s.me ? { cat: s.cat, h: 1, me: 1, rm: room.rm.me ? 1 : 0 } : { cat: s.cat, h: 1, rm: room.rm.f ? 1 : 0 })));
-    return { t: "room", code: room.code, size: room.size, seats, you: room.you, k: room.k, now: now() };
+    const seats = room.seats.map(col => col.map(s => {
+      if (!s) return null; const o = { cat: s.cat, h: 1 };
+      if (s.me){ o.me = 1; if (room.makerMe) o.mk = 1; if (room.after && room.rm.me) o.rm = 1; } else { if (s.mk) o.mk = 1; if (room.after && room.rm.f) o.rm = 1; }
+      return o; }));
+    return { t: "room", code: room.code, size: room.size, seats, you: room.you, k: room.k, now: now(), after: room.after ? 1 : 0 };
   }
 
   /* matches: solo = the challenge vs the hard bot (§7/§8); a room = versus */
@@ -78,7 +85,7 @@ const Fake = (() => {
     if (solo){ size = SOLO_SIZE; you = { team: 0, slot: 0 }; md = 1;
       cats = [[cat], [3]]; bots = [[0], [1]]; for (let s = 1; s < size; s++){ cats[0].push((cat + s) % 4); cats[1].push(s % 4); bots[0].push(1); bots[1].push(1); } }
     else { size = room.size; you = room.you; md = 0; cats = room.seats.map(col => col.map(s => s.cat)); bots = room.seats.map(col => col.map(() => 0));
-      room.k = null; room.rm = {}; room.used = true; }
+      room.k = null; room.rm = {}; room.used = true; room.after = 0; }
     const seed = Math.floor(Math.random() * 2147483647);
     const m = S().createMatch({ seed, humans: [you], cats, size, mode: md ? "challenge" : "versus", goalsToWin: need() });
     // the fake friends are played by the sim's bots, but they are people on the phone (bots = 0)
@@ -106,7 +113,7 @@ const Fake = (() => {
     const sc = snap.sc || [w === 0 ? 1 : 0, w === 1 ? 1 : 0];
     let r = e && (me === 0 ? e.r0 : e.r1);
     if (!r) r = M.md ? (w === me ? "win" : "lose") : (w < 0 ? "draw" : w === me ? "win" : "lose");
-    let c = code(6), prize = null;
+    let c = code(6), prize = PRIZE && !(M.md && r !== "win") ? { label: PRIZE[r] } : null;
     if (!FAKE){   // plan B: the code still comes from the server
       const res = await Net.post("/solo", { dev, goals: sc[me], ms: Date.now() - M.t0 });
       c = res && res.ok && res.code ? res.code : null; prize = res && res.prize || null; if (res && res.r) r = res.r;
@@ -114,6 +121,7 @@ const Fake = (() => {
     const msg = { t: "end", id: M.id, r, w, code: c, prize, md: M.md, sc };
     if (c) results.push({ code: c, r, at: now(), prize, used: null });
     lastEnd = msg; out(msg);
+    if (room && !M.solo){ room.after = 1; out(roomMsg()); }   // the room stays for a rematch
   }
 
   function recv(m){
@@ -132,18 +140,19 @@ const Fake = (() => {
       case "join": {
         if (closed){ out({ t: "err", m: "closed" }); break; }
         const c = String(m.code || "").toUpperCase();
-        if (c === "FULL") out({ t: "err", m: "room-full" });
-        else if (c === "GONE") out({ t: "err", m: "started" });
-        else if (c.length !== 4 || c === "NONE" || [...c].some(ch => ABC.indexOf(ch) < 0)) out({ t: "err", m: "no-room" });
+        if (c === "FFFF") out({ t: "err", m: "room-full" });
+        else if (c === "XXXX") out({ t: "err", m: "started" });
+        else if (c.length !== 4 || c === "NNNN" || [...c].some(ch => ABC.indexOf(ch) < 0)) out({ t: "err", m: "no-room" });
         else newRoom(+(Q.get("size") || 1) === 2 ? 2 : 1, m.cat | 0, true, c);
         break; }
       case "seat":
-        if (room && !room.k && room.seats[m.team] && room.seats[m.team][m.slot] === null){ sit(room.seats[room.you.team][room.you.slot].cat, m.team, m.slot); out(roomMsg()); checkFull(); }
+        if (room && !room.k && room.seats[m.team] && room.seats[m.team][m.slot] !== undefined && !(m.team === room.you.team && m.slot === room.you.slot)){
+          sit(room.seats[room.you.team][room.you.slot].cat, m.team, m.slot); out(roomMsg()); checkFull(); }
         break;
-      case "rematch":
+      case "start": if (room && room.makerMe && !match) go(); break;
+      case "rematch":                                            // everyone taps Rematch, then the countdown
         if (!room || match) break; room.rm.me = 1; out(roomMsg());
-        setTimeout(() => { if (room && !match){ room.rm.f = 1; out(roomMsg()); room.k = now() + 5000; out(roomMsg()); const id = room.code;
-          room.timer = setTimeout(() => { if (room && room.code === id && room.k) startMatch(false); }, 5000); } }, 1500);
+        setTimeout(() => { if (room && !match){ room.rm.f = 1; out(roomMsg()); go(); } }, 1500);
         break;
       case "leave": if (room && !match){ clearTimeout(room.timer); room = null; } break;
     }

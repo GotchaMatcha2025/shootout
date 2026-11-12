@@ -37,8 +37,8 @@ function toWorld(v, sx, sy, W, H){
 }
 const backoff = tries => Math.min(3000, 300 * Math.pow(2, tries));   // reconnect wait before jitter: 300, 600, 1200, 2400, 3000 ms
 const CODE_ABC = "ACDEFHJKMNPQRTUVWXY34679";
-// typed game code: upper case, letters and digits only, 4 long (a letter outside the code alphabet stays, so the server can say "No game")
-const cleanCode = s => String(s || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 4);
+// typed game code: upper case, O read as 0, only the code alphabet kept (§12.5: S, 1, I, L, B never reach the server as a wrong try)
+const cleanCode = s => String(s || "").toUpperCase().replace(/O/g, "0").split("").filter(c => CODE_ABC.indexOf(c) >= 0).join("").slice(0, 4);
 const goals = n => n === 1 ? "1 goal" : n + " goals";
 root.L3 = { interp, stamp, shouldSend, histAt, toWorld, backoff, cleanCode, goals, CODE_ABC };
 })(typeof globalThis !== "undefined" ? globalThis : this);

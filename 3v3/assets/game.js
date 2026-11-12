@@ -14,20 +14,19 @@ const CONFIG = {
 };
 const $ = s => document.querySelector(s);
 const Q = new URLSearchParams(location.search), DEBUG = Q.has("debug"), C = Sim3.C, COL = Draw.COL, NS = Net.NS, Store = Net.Store;
-const SCREENS = ["home", "join", "pick", "mode", "multi", "lobby", "match", "result", "rest"];
+const SCREENS = ["home", "join", "mode", "multi", "code", "lobby", "match", "result", "rest"];
 const SGT = (() => { try { return new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Singapore", hour: "2-digit", minute: "2-digit", hour12: false }); } catch (e) { return null; } })();
 const hhmm = ts => SGT ? SGT.format(new Date(ts)) : new Date(ts).toTimeString().slice(0, 5);   // always Singapore time
 const buzz = p => { try { if (navigator.vibrate) navigator.vibrate(p); } catch (e) { /* not on iPhone */ } };   // haptics where the phone has them
 const ERRS = { "no-room": "No game", "room-full": "Full", started: "Started", busy: "Busy", bad: "Try again" };   // one short line (§13)
 
 let screen = "home";
-function show(n){ const was = screen; screen = n; if (n === "pick") G.catLock = false; if (n === "rest" && was !== "rest"){ restN = 0; setTimeout(restLoop, 0); } SCREENS.forEach(s => { $("#s-" + s).hidden = s !== n; }); $("#stadium").hidden = n === "match"; if (n === "home" && tickerAt) homeTicker(); if (n === "mode") modeState(); if (n === "match") sizePads(); pillCheck(); ticketState(); }
+function show(n){ const was = screen; screen = n; if (n === "rest" && was !== "rest"){ restN = 0; setTimeout(restLoop, 0); } SCREENS.forEach(s => { $("#s-" + s).hidden = s !== n; }); $("#stadium").hidden = n === "match"; if (n === "home" && tickerAt) homeTicker(); if (n === "mode") modeState(); if (n === "match") sizePads(); pillCheck(); ticketState(); }
 function toast(msg, ms){ const t = $("#toast"); t.textContent = msg; t.hidden = false; clearTimeout(toast.h); toast.h = setTimeout(() => { t.hidden = true; }, ms || 2200); }
 
-const G = { cat: Store.get("s3v3:cat"), joined: !!Store.get("s3v3:joined"), want: null, phase: "idle", solo: false, local: false, everUp: false,
+const G = { cat: 0, joined: !!Store.get("s3v3:joined"), want: null, phase: "idle", solo: false, local: false, everUp: false,
   room: null, M: null, last: null, need: C.CHALLENGE_GOALS || 1, multiRest: false, soloLocal: false, soloTimer: 0, roomTimer: 0, rematch: false,
   prize: Store.get(NS + "prize") };   // the newest prize ticket (adversarial S1): {code, label, exp, used, id}
-if (!(G.cat >= 0 && G.cat < 4)) G.cat = 0;
 
 /* ---------- the socket ---------- */
 const sock = Net.Socket({
@@ -52,7 +51,7 @@ const sock = Net.Socket({
   }
 });
 function send(o){ return sock.send(o); }
-function leaveAll(){ Sfx.bedStop(); clearTimeout(G.soloTimer); clearTimeout(G.roomTimer); G.phase = "idle"; G.want = null; G.room = null; G.M = null; G.rematch = false; sock.stop(); }
+function leaveAll(){ Sfx.bedStop(); Crowd.stop(); clearTimeout(G.soloTimer); clearTimeout(G.roomTimer); G.phase = "idle"; G.want = null; G.room = null; G.M = null; G.rematch = false; sock.stop(); }
 
 function onMsg(m){
   if (typeof m.now === "number") Net.clock.hint(m.now);
@@ -76,7 +75,7 @@ function onErr(m){
   // a room that closes (no rematch in 60 s) must never take the prize code off the result screen
   if (screen === "result"){ G.room = null; G.phase = "idle"; G.rematch = false; sock.stop(); return; }
   if (G.solo){ leaveAll(); show("mode"); toast(ERRS[m.m] || ERRS.bad); return; }
-  leaveAll(); show("mode"); const e = $("#codeErr"); e.textContent = ERRS[m.m] || ERRS.bad; e.hidden = false;
+  leaveAll(); show("code"); const e = $("#codeErr"); e.textContent = ERRS[m.m] || ERRS.bad; e.hidden = false;   // join errors under the code box
 }
 
 /* ---------- full server: a spinner pill, the same ask again after 3 / 6 / 10 s; any tap of the player's own cancels it ---------- */
@@ -87,7 +86,7 @@ function busyStart(again){
   G.busy = { n: n + 1, timer: setTimeout(again, wait) }; $("#busy").hidden = false; return true;
 }
 function busyStop(){ if (G.busy) clearTimeout(G.busy.timer); G.busy = null; $("#busy").hidden = true; }
-document.addEventListener("click", e => { const b = e.target.closest("button, a.btn, .card"); if (G.busy && b && b.id !== "soundBtn" && b.id !== "ticketBtn") busyStop(); }, true);
+document.addEventListener("click", e => { const b = e.target.closest("button, a.btn"); if (G.busy && b && b.id !== "soundBtn" && b.id !== "ticketBtn") busyStop(); }, true);
 
 /* ---------- home, join step, cat, mode ---------- */
 $("#goJoin").addEventListener("click", () => { if (G.joined) afterJoinStep(); else show("join"); });
@@ -98,8 +97,8 @@ function joinCode(code){
   if (G.deep === code){ G.deep = null; try { const u = new URL(location.href); u.searchParams.delete("join"); history.replaceState(null, "", u.pathname + u.search + u.hash); } catch (e) { /* old browser */ } }
   ask({ t: "join", code, cat: G.cat });
 }
-// the cat comes after the choice (rev 9): pick it, then go
-function pickThen(f){ G.catLock = false; G.next = f; [...cardsEl.children].forEach(x => x.setAttribute("aria-pressed", "false")); show("pick"); }
+// no cat pick any more (owner ~05:45): a choice goes straight on
+function pickThen(f){ f(); }
 let tickerAt = 0;   // the ticker's counts are asked again when home shows (at most every 30 s)
 function homeTicker(){ if (Date.now() - tickerAt < 30000) return; tickerAt = Date.now(); Net.health().then(h => { if (h && h.ok) ticker(h); }); }
 [["#tgJoin", CONFIG.telegram], ["#igJoin", CONFIG.instagram], ["#restTg", CONFIG.telegram], ["#restIg", CONFIG.instagram]].forEach(([s, u]) => { $(s).href = u; });
@@ -107,17 +106,9 @@ function homeTicker(){ if (Date.now() - tickerAt < 30000) return; tickerAt = Dat
 function joinedNow(){ G.joined = true; Store.set("s3v3:joined", 1); $("#tgErr").hidden = true; }
 $("#tgJoin").addEventListener("click", joinedNow); $("#igJoin").addEventListener("click", joinedNow);
 $("#goPick").addEventListener("click", () => { if (!G.joined){ $("#tgErr").hidden = false; return; } afterJoinStep(); });
-const cardsEl = $("#cards");
-Draw.CATS.forEach((c, i) => {
-  const b = document.createElement("button"); b.className = "card"; b.setAttribute("aria-pressed", String(G.cat === i));
-  b.innerHTML = '<span class="num">' + [7, 10, 9, 1][i] + '</span><img alt="" src="' + c.src + '"><span>' + c.name + "</span>";   // rev 8 trading cards
-  b.addEventListener("click", () => { if (G.catLock) return; G.catLock = true;   // locked until the cat screen opens again
-    G.cat = i; Store.set("s3v3:cat", i); [...cardsEl.children].forEach((x, j) => x.setAttribute("aria-pressed", String(j === i))); setTimeout(() => { const f = G.next; G.next = null; if (f) f(); else show("mode"); }, 250); });
-  cardsEl.appendChild(b);
-});
 function modeState(){
   $("#mSoloSub").textContent = L3.goals(G.need) + " wins";
-  $("#mMulti").disabled = G.multiRest; $("#mMultiSub").textContent = G.multiRest ? "😴" : "1 v 1 · 2 v 2";   // §8: multiplayer resting
+  $("#mMulti").disabled = G.multiRest; $("#mMultiSub").textContent = G.multiRest ? "😴" : "2–4 players";   // §8: multiplayer resting
   $("#codeIn").disabled = $("#joinGo").disabled = G.multiRest;   // plan B: no joining by code either
   const e = $("#codeErr"); if (G.multiRest){ e.textContent = "😴 Friends resting"; e.hidden = false; } else if (e.textContent === "😴 Friends resting") e.hidden = true;
 }
@@ -134,10 +125,12 @@ function ask(msg){
 $("#joinForm").addEventListener("submit", e => {
   e.preventDefault(); if (G.multiRest) return; const code = L3.cleanCode($("#codeIn").value);
   if (code.length !== 4){ const er = $("#codeErr"); er.textContent = "Wrong code"; er.hidden = false; return; }
-  $("#codeIn").blur(); pickThen(() => joinCode(code));
+  $("#codeIn").blur(); joinCode(code);   // straight into the room (no cat pick)
 });
-$("#n1").addEventListener("click", () => { ask({ t: "create", size: 1, cat: G.cat }); });
-$("#n2").addEventListener("click", () => { ask({ t: "create", size: 2, cat: G.cat }); });
+// FRIENDS (§16): create a game (a room of up to 4; teams by join order) or join one with a code
+$("#fCreate").addEventListener("click", () => { ask({ t: "create", cat: G.cat }); });   // §16: no size (a 4-seat room)
+$("#fJoin").addEventListener("click", () => { $("#codeErr").hidden = true; show("code"); });
+$("#codeBack").addEventListener("click", () => { $("#codeErr").hidden = true; show("multi"); });
 $("#multiBack").addEventListener("click", () => { leaveAll(); show("mode"); });
 
 /* ---------- single player: vs the Matcha Bot (§7, §8, §11) ---------- */
@@ -174,32 +167,31 @@ function onRoom(m){
   renderRoom();
 }
 const mineSeat = r => { for (let t = 0; t < 2; t++) for (const s of r.seats[t] || []) if (s && s.me) return s; return null; };
+// owner ~05:36 (§16): up to 4, teams by join order (Matcha, Yuzu, Matcha, Yuzu); 2 → 1 v 1, 4 → 2 v 2, 3 → 2 v 2 + a Matcha Bot
+// in the empty seat (owner answer); the maker's Start lights up from 2 players; no swapping
 function renderRoom(){
   const r = G.room; if (!r) return;
-  const me = mineSeat(r) || {}, after = !!(r.after || G.rematch);
+  const me = mineSeat(r) || {}, after = !!(r.after || G.rematch), n = typeof r.n === "number" ? r.n : (r.seats[0] || []).concat(r.seats[1] || []).filter(Boolean).length, min = r.min || 2;
   let h = "", missing = 0;
   for (let t = 0; t < 2; t++){
     h += '<div><h4 style="color:' + COL[t].f + '">TEAM ' + COL[t].name + "</h4>";
     (r.seats[t] || []).forEach((s, i) => {
-      // any seat is a button: a free one moves you, a taken one swaps you both (§12.2)
-      const dis = r.k || (s && s.me) ? " disabled" : "";
-      if (!s){ missing++; h += '<button class="slot empty" data-t="' + t + '" data-s="' + i + '" aria-label="Sit here"' + dis + ">＋</button>"; return; }
+      if (!s){ missing++; h += n === 3 && !r.booth ? '<div class="slot bot" aria-label="Matcha Bot">🤖</div>' : '<div class="slot empty" aria-label="Free seat"></div>'; return; }   // a plain free seat
       const mark = s.off ? "💤" : after && s.rm ? "✓" : "";
-      h += '<button class="slot' + (s.me ? " me" : "") + '" id="sl' + t + i + '" data-t="' + t + '" data-s="' + i + '"' + dis + '><canvas width="60" height="60"></canvas><span class="who">' +
-        (s.me ? "YOU" : "") + '</span><span class="mark">' + mark + "</span></button>";
+      h += '<div class="slot' + (s.me ? " me" : "") + '" id="sl' + t + i + '"><canvas width="60" height="60"></canvas><span class="who">' +
+        (s.me ? "YOU" : "") + '</span><span class="mark">' + mark + "</span></div>";
     });
     h += "</div>";
   }
   $("#slots").innerHTML = h;
-  for (let t = 0; t < 2; t++) (r.seats[t] || []).forEach((s, i) => { if (!s) return; const cv = document.querySelector("#sl" + t + i + " canvas"), fc = Draw.faceCanvas(s.cat, t, 60); if (fc && cv) cv.getContext("2d").drawImage(fc, 0, 0, 60, 60); });
-  r.missing = missing; r.maker = !!me.mk;
-  $("#roomKind").textContent = r.size + " V " + r.size;
-  // the game maker taps Start on a full room (§12.2); everyone else sees a short line
-  $("#startGo").hidden = !(r.maker && !missing && !r.k && !r.booth);
+  for (let t = 0; t < 2; t++) (r.seats[t] || []).forEach((s, i) => { if (!s) return; const cv = document.querySelector("#sl" + t + i + " canvas"); if (cv) cv.getContext("2d").drawImage(Draw.discCanvas(t, 60), 0, 0, 60, 60); });   // a team-colour disc
+  r.missing = missing; r.maker = !!me.mk; r.n = n;
+  $("#roomKind").textContent = r.booth ? "1 V 1" : n <= 1 ? "1 / 4" : n === 2 ? "1 V 1" : n === 3 ? "2 V 2 · 🤖" : "2 V 2";
+  // the game maker's Start: there from the first player, lit from 2 players; everyone else waits for it
+  $("#startGo").hidden = !(r.maker && !r.k && !r.booth); $("#startGo").disabled = n < min; $("#startGo").textContent = n < min ? "Need " + (min - n) + " more" : "▶ Start";
   $("#vsBot").hidden = !(r.booth && r.lonely && missing && !r.k);   // alone at the booth game for a minute: one tap to play the bot
   roomTick();
 }
-$("#slots").addEventListener("click", e => { const b = e.target.closest("button.slot"); if (!b || b.disabled) return; send({ t: "seat", team: +b.dataset.t, slot: +b.dataset.s }); });
 $("#startGo").addEventListener("click", () => { $("#startGo").hidden = true; send({ t: "start" }); });
 $("#leaveGo").addEventListener("click", () => { send({ t: "leave" }); leaveAll(); show("mode"); });
 $("#vsBot").addEventListener("click", () => { send({ t: "leave" }); startSolo(); });   // startSolo leaves the room first
@@ -208,7 +200,7 @@ function roomTick(){
   const r = G.room; if (!r || screen !== "lobby") return;
   let big, hint, foot;
   if (r.k){ const n = Math.max(0, Math.ceil((r.k - Net.now()) / 1000)); big = String(n); hint = ""; foot = ""; if (n !== lastCount && n > 0){ lastCount = n; Sfx.play("tick"); } }
-  else { big = r.code; hint = r.booth ? "📺 Booth game" : r.maker ? "Share this code" : "You're in"; foot = r.missing ? "Tap to swap" : r.maker && !r.booth ? "" : "Starting soon…"; lastCount = -1; }
+  else { big = r.code; hint = r.booth ? "📺 Booth game" : r.maker ? "Share this code" : "You're in"; foot = r.maker && !r.booth ? "" : r.booth && r.missing ? "" : "Waiting to start…"; lastCount = -1; }
   [["#lCount", big], ["#roomHint", hint], ["#roomFoot", foot]].forEach(([s, v]) => { const el = $(s); if (el.textContent !== v) el.textContent = v; });
 }
 
@@ -228,7 +220,7 @@ function onStart(m){
   G.M.sub = L3.subLine(G.M.md, G.M.need);
   G.phase = "match"; G.want = null; G.rematch = false; finger.a = 0; finger.id = null; lastSent = null;
   Store.set(NS + "pend", { id: m.id, at: Date.now() });
-  Fx.clear(); show("match"); banner("3", G.M.sub); $("#hint").hidden = false; hudSet(true);
+  Crowd.stop(); Fx.clear(); show("match"); banner("3", G.M.sub); $("#hint").hidden = false; hudSet(true);
 }
 function onSnap(m){
   const M = G.M; if (!M || !Array.isArray(m.p) || !Array.isArray(m.b)) return;
@@ -257,7 +249,7 @@ const myIdx = (M, s) => M.you.team * (s.p.length / 2) + M.you.slot;
 function onEv(m){
   const M = G.M; if (!M) return; const me = M.you.team;
   switch (m.k){
-    case "go": banner("GO!", "", 700); Sfx.play("whistle"); Sfx.bed(0.8); break;   // the crowd bed runs while the ball is live
+    case "go": banner("GO!", "", 700); Sfx.play("whistle"); Sfx.bed(0.8); if (Crowd.mode === null) Crowd.start(); else Crowd.run(); break;   // murmur + the Viking row (from the top) while the ball is live
     case "kickoff": banner(""); M.cdShown = -1; break;                     // a challenge goes on after the bot's goal
     case "grow": banner("↔ BIGGER GOALS", "", 1400); break;
     case "goal": {
@@ -268,17 +260,17 @@ function onEv(m){
       // multiplayer: the score under GOAL! (Matcha – Yuzu, like the HUD); then the lights for every goal
       banner(botGoal ? "🤖 GOAL!" : "GOAL!", M.md ? "" : L3.scoreText(M.sc, 0, 1), botGoal ? 1400 : 0); hudSet(true);
       lights(m.w, !botGoal, botGoal ? 1 - me : -1);
-      Sfx.play("whistle"); Sfx.play("horn"); Sfx.play("roar"); Sfx.play("net"); Sfx.bed(1.6); setTimeout(() => Sfx.bed(0.8), 2500);   // every goal
+      Crowd.pause(); Sfx.play("whistle"); Sfx.play("horn"); Sfx.play("net"); Crowd.wooo(); Sfx.bed(1.6); setTimeout(() => Sfx.bed(0.8), 2500);   // every goal: "Wooo!" + roar; the row starts again at the kick-off
       if (mine) Sfx.play("fanfare");
       buzz(botGoal ? [40, 30, 40] : [60, 40, 90]); break; }
-    case "draw": case "timeup": banner(m.k === "timeup" || M.md ? "TIME UP" : "DRAW"); Sfx.play("whistle"); Sfx.bedStop(); break;   // timeup = vs the bot, time ran out
+    case "draw": case "timeup": banner(m.k === "timeup" || M.md ? "TIME UP" : "DRAW"); Sfx.play("whistle"); Sfx.bedStop(); Crowd.stop(); break;   // timeup = vs the bot, time ran out
     case "hit": { const mine = m.team === me && m.slot === M.you.slot; if (mine || m.p > 0.5) Sfx.play("kick", m.p); if (mine) buzz(Math.round(8 + 22 * (m.p || 0)));
       if (m.p > 0.7 && !Draw.REDUCED) freeze = Math.max(freeze, 0.06); break; }   // hit-stop on a big hit
     case "wall": Sfx.play("wall"); break;
     case "post": {   // a fast ball off the post = a near miss: "ooh", 😱, the crowd jumps, a beat of hit-stop (the server keeps playing)
       Sfx.play("clang"); const b = M.newest && M.newest.b;
       // the sim's own near flag when it sends one, else a fast ball off the post
-      if (b && M.newest.st === C.ST_PLAY && (m.near !== undefined ? !!m.near : Math.hypot(b[2], b[3]) > 22)){ Sfx.play("ooh"); banner("😱", "", 700); Draw.st.hype = 1.2; Draw.st.hypeTeam = -1; if (!Draw.REDUCED) freeze = Math.max(freeze, 0.1); }
+      if (b && M.newest.st === C.ST_PLAY && (m.near !== undefined ? !!m.near : Math.hypot(b[2], b[3]) > 22)){ Crowd.oooh(); banner("😱", "", 700); Draw.st.hype = 1.2; Draw.st.hypeTeam = -1; if (!Draw.REDUCED) freeze = Math.max(freeze, 0.1); }
       break; }
   }
 }
@@ -382,7 +374,7 @@ function drawMatch(dt, now){
 async function lostMatch(){
   const M = G.M; if (!M) return; G.M = null; G.phase = "idle";
   const r = await Net.post("/result", { dev: Net.dev });
-  if (L3.sameMatch(r, M.id)){ onEnd({ id: M.id, r: r.r, code: r.code, prize: r.prize, used: r.used, exp: r.exp, why: r.why, md: M.md, sc: M.sc, team: M.you.team }); return; }
+  if (L3.sameMatch(r, M.id)){ onEnd({ id: M.id, r: r.r, code: r.code, prize: r.prize, used: r.used, exp: r.exp, why: r.why, md: M.md, sc: M.sc, team: M.you.team, now: r.now, prizes: r.prizes }); return; }   // now: the countdown on server time
   leaveAll(); show("mode"); toast("Match lost");
 }
 
@@ -391,23 +383,24 @@ function onEnd(m){
   send({ t: "got", id: m.id });                                   // §9.2: the server stops re-sending this result
   if (G.last && G.last.id === m.id && screen === "result") return;
   const M = G.M, team = M ? M.you.team : (typeof m.team === "number" ? m.team : 0);
-  const res = { id: m.id, r: m.r, w: m.w, code: m.code || null, prize: m.prize || null, md: m.md !== undefined ? (m.md ? 1 : 0) : (M ? M.md : 0),
+  const res = { id: m.id, r: m.r, w: m.w, code: m.code || null, prize: L3.normPrize(m.prize), off: typeof m.now === "number" ? m.now - Date.now() : Net.clock.offset, md: m.md !== undefined ? (m.md ? 1 : 0) : (M ? M.md : 0),
     sc: Array.isArray(m.sc) ? m.sc : M ? M.sc : null, team, at: Date.now(), used: m.used || null, solo: G.solo, exp: m.exp || null, why: m.why || null,
     booth: !!(G.room && G.room.booth),   // a booth room is single-use: the server opens a new one at kick-off
     secs: M && M.md && typeof M.goalTl === "number" ? Math.round(((M.secs || C.MATCH_S) * 1000 - M.goalTl) / 100) / 10 : null };   // personal best: single player only   // seconds to the winning goal
-  G.last = res; Store.set(NS + "last", res); Store.del(NS + "pend");
-  const kept = L3.keepPrize(G.prize, res); if (kept !== G.prize){ G.prize = kept; Store.set(NS + "prize", kept); }   // a later no-prize result never replaces it
+  G.last = res; Store.set(NS + "last", res); Store.del(NS + "pend"); res.fresh = true;
+  if (Array.isArray(m.prizes)) G.prizeList = L3.prizeList(m.prizes);
+  const kept = L3.keepPrize(G.prize, res); if (kept !== G.prize){ G.prize = kept; Store.set(NS + "prize", G.prize); }   // a later no-prize result never replaces it
   G.M = null; clearTimeout(G.soloTimer);
   if (res.booth) G.room = null;
   if (G.solo || res.booth){ G.phase = "idle"; setTimeout(() => { if (G.phase === "idle") sock.stop(); }, 1200); } else G.phase = G.room ? "room" : "idle";
-  Sfx.bedStop(); Fx.clear(); showResult(res);
-  if (res.r === "win"){ Sfx.play("fanfare"); Sfx.play("coin"); Fx.fireworks(6); Fx.confetti(["#6fbf4a", "#ffd23f", "#fffbe6"], 0); buzz([60, 40, 120]); }   // fireworks: not with reduced motion / lite
+  Sfx.bedStop(); Crowd.stop(); Fx.clear(); showResult(res);
+  if (res.r === "win"){ Crowd.hurrah(); Sfx.play("fanfare"); Sfx.play("coin"); Fx.fireworks(6); Fx.confetti(["#6fbf4a", "#ffd23f", "#fffbe6"], 0); buzz([60, 40, 120]); }   // fireworks: not with reduced motion / lite
   else if (res.r === "lose") Sfx.play("sad"); else Sfx.play("whistle");
 }
 function showResult(res){
   const ch = res.md === 1, win = res.r === "win", me = res.team, sc = res.sc || [0, 0]; if (!win) Fx.clear();
   $("#rTitle").textContent = win ? "WIN!" : res.r === "draw" ? "DRAW" : "LOSE";
-  $("#trophy").hidden = !win; $("#sadcat").hidden = win;   // rev 8: the trophy with rays, or the sad cat
+  $("#trophy").hidden = !win;   // the trophy for a win; no cat on a loss (owner ~05:45)
   // personal best on this phone: the fastest winning goal ("⚡ 12.4s · 🏅 BEST")
   const pb = $("#pb"); pb.hidden = !(win && res.md === 1 && res.secs > 0);
   if (!pb.hidden){ const best = Store.get(NS + "best"), isBest = !(best > 0) || res.secs < best; if (isBest && !res.shown) Store.set(NS + "best", res.secs);
@@ -420,30 +413,41 @@ function showResult(res){
 }
 // the card shows only when there is something to redeem: a prize name from the server and a code; a lost single-player game never has one
 const hasPrize = L3.hasPrize;
-function prizeCard(res){
+// the voucher card (assets/voucher.js; owner ~05:56 "build all", API §15): a reveal the first time, a live countdown on the server's clock,
+// HOLD AT COUNTER → POST /use, USED / EXPIRED stamps. The 🎟 sheet shows the same card.
+const vOf = p => ({ code: p.code, title: (p.prize && p.prize.t) || p.label || (p.prize && p.prize.label) || "", sub: (p.prize && p.prize.s) || p.sub || "",
+  exp: p.exp || (p.at + 15 * 60000), used: p.used || null, off: typeof p.off === "number" ? p.off : null, roll: G.prizeList && G.prizeList.length ? G.prizeList : null });
+const offOf = r => r && typeof r.now === "number" ? r.now - Date.now() : null;   // server clock − phone clock from a reply
+async function useVoucher(v){
+  const r = await Net.post("/use", { dev: Net.dev, code: v.code }, 6000);   // the server marks it used (§15); no answer in 6 s = no signal
+  const off = offOf(r); if (off !== null) v.off = off;
+  const used = r && r.ok ? r.used : r && r.e === "already" ? r.used : null;
+  if (used){ [G.last, G.prize].forEach(x => { if (x && x.code === v.code){ x.used = used; if (off !== null) x.off = off; } }); if (G.last) Store.set(NS + "last", G.last); if (G.prize) Store.set(NS + "prize", G.prize); }
+  return r;
+}
+function prizeCard(res, opt){
   const has = hasPrize(res);
   $("#prize").hidden = !has; if (!has) return;
-  $("#pV").textContent = res.prize.label; $("#pCode").textContent = res.code; $("#pBy").textContent = res.exp && !res.used ? "by " + hhmm(res.exp) : "";
-  $("#pS").textContent = res.used ? "✓ Used " + hhmm(res.used) : "Redeem at the counter"; $("#prize").classList.toggle("is-used", !!res.used);
+  Voucher.render($("#prize"), vOf(res), Object.assign({ reveal: !!res.fresh, onUse: useVoucher }, opt || {})); res.fresh = false;
 }
 /* the ticket: 🎟 on every screen but the pitch while the newest prize is unused and not expired; it opens the same card */
 function ticketState(){
   const live = L3.prizeLive(G.prize, Date.now()), sheet = $("#ticket");
   const on = live && screen !== "match" && sheet.hidden && !(screen === "result" && G.last && G.last.code === G.prize.code);
   if ($("#ticketBtn").hidden === on) $("#ticketBtn").hidden = !on;
-  if (!sheet.hidden){ const p = G.prize; if (!p){ sheet.hidden = true; return; }
-    $("#tV").textContent = p.label; $("#tCode").textContent = p.code; $("#tBy").textContent = p.exp && !p.used ? "by " + hhmm(p.exp) : "";
-    $("#tS").textContent = p.used ? "✓ Used " + hhmm(p.used) : p.exp && Date.now() >= p.exp ? "Expired" : "Redeem at the counter"; }
+  if (!sheet.hidden && !G.prize) sheet.hidden = true;
 }
-$("#ticketBtn").addEventListener("click", () => { $("#ticket").hidden = false; ticketState(); recheckPrize(); });
+$("#ticketBtn").addEventListener("click", () => { $("#ticket").hidden = false; Voucher.render($("#tCard"), vOf(G.prize), { onUse: useVoucher }); ticketState(); recheckPrize(); });
 $("#ticketClose").addEventListener("click", () => { $("#ticket").hidden = true; ticketState(); });
 // staff redeem on their page: when this page comes back (or loads), it asks the server about the ticket, so it shows "✓ Used"
 async function recheckPrize(){
   const p = G.prize; if (!p || !p.code || p.used) return;
   const r = await Net.post("/result", { dev: Net.dev, code: p.code });
   if (!r || !r.ok || G.prize !== p) return;
-  if (r.used) p.used = r.used; if (r.exp) p.exp = r.exp; Store.set(NS + "prize", p);
+  if (r.used) p.used = r.used; if (r.exp) p.exp = r.exp; const off = offOf(r); if (off !== null) p.off = off; Store.set(NS + "prize", p);
   if (G.last && G.last.code === p.code){ G.last.used = p.used; G.last.exp = p.exp; Store.set(NS + "last", G.last); if (screen === "result") prizeCard(G.last); }
+  const tc = $("#tCard");   // the open 🎟 sheet shows the answer (a staff redeem → USED); never mid-hold or mid-"Checking…"
+  if (!$("#ticket").hidden && !tc.dataset.busy && !tc.querySelector(".vhold.down")) Voucher.render(tc, vOf(p), { onUse: useVoucher });
   ticketState();
 }
 // the result on screen: asked again when the page comes back (prize, use); the ticket has its own check
@@ -451,7 +455,8 @@ async function recheck(){
   const res = G.last; if (!res || !res.code || res.used){ recheckPrize(); return; }
   const r = await Net.post("/result", { dev: Net.dev, code: res.code });
   if (r && r.ok && G.last === res){
-    if (r.used) res.used = r.used; if (r.prize !== undefined) res.prize = r.prize; if (r.exp) res.exp = r.exp; Store.set(NS + "last", res);
+    if (r.used) res.used = r.used; if (r.prize !== undefined) res.prize = L3.normPrize(r.prize); if (r.exp) res.exp = r.exp; const off = offOf(r); if (off !== null) res.off = off;
+    Store.set(NS + "last", res);
     const kept = L3.keepPrize(G.prize, res); if (kept !== G.prize){ G.prize = kept; Store.set(NS + "prize", kept); }
     if (screen === "result") prizeCard(res);
   }
@@ -471,9 +476,10 @@ function restLoop(){ clearTimeout(restT); if (screen !== "rest") return; restT =
 /* ---------- sound, reconnect pill, debug, lite ---------- */
 function soundBtn(){ const b = $("#soundBtn"); b.textContent = Sfx.on ? "🔊" : "🔇"; b.setAttribute("aria-pressed", String(Sfx.on)); b.setAttribute("aria-label", Sfx.on ? "Sound on" : "Sound off"); }
 Sfx.init(); soundBtn();
-$("#soundBtn").addEventListener("click", () => { Sfx.unlock(); Sfx.setOn(!Sfx.on); soundBtn(); Sfx.play("tap"); });
+$("#soundBtn").addEventListener("click", () => { Sfx.unlock(); Sfx.setOn(!Sfx.on); soundBtn(); Sfx.play("tap");
+  if (!Sfx.on) Crowd.halt(); else if (G.M && G.M.newest && G.M.newest.st === C.ST_PLAY) Crowd.run(); });   // mute stops the crowd too
 // every other button and link-button clicks (sound + a tiny buzz on phones that have one)
-document.addEventListener("click", e => { const b = e.target.closest("button, a.btn, .card"); if (b && b.id !== "soundBtn" && !b.disabled){ Sfx.play("tap"); buzz(8); } }, true);
+document.addEventListener("click", e => { const b = e.target.closest("button, a.btn"); if (b && b.id !== "soundBtn" && !b.disabled){ Sfx.play("tap"); buzz(8); } }, true);
 // the browser lets sound start only inside a tap; iOS counts touchend / click, Android pointerdown
 ["pointerdown", "touchend", "click"].forEach(n => document.addEventListener(n, () => Sfx.unlock(), { capture: true, passive: true }));
 let downSince = 0;
@@ -490,7 +496,7 @@ if (Q.has("lite") || (navigator.hardwareConcurrency || 8) <= 2){ Draw.st.lite = 
 let perfN = 0, perfSum = 0;
 function perfWatch(dt){   // slow phone: under ~36 fps for 2 s of a match → lite drawing (no trail, no floodlight pools)
   if (Draw.st.lite || screen !== "match" || !(dt > 0)) return; perfN++; perfSum += dt;
-  if (perfN >= 120){ if (perfSum / perfN > 0.028){ Draw.st.lite = true; document.body.classList.add("lite"); if (DEBUG) toast("Lite mode"); } perfN = 0; perfSum = 0; }
+  if (perfN >= 120){ if (perfSum / perfN > 0.028){ Draw.st.lite = true; document.body.classList.add("lite"); Crowd.slow(); if (DEBUG) toast("Lite mode"); } perfN = 0; perfSum = 0; }
 }
 // lag readout for the owner's phone (?debug): round trip, frames a second, gaps between snapshots, how far behind others are drawn
 const Lag = { fps: 0, n: 0, t0: 0, gapLast: 0, gapMax: 0, gaps: [], lastArr: 0,
@@ -542,7 +548,8 @@ function frame(now){
   Fx.frame(dt); Lag.frame(now); perfWatch(dt); sendInput(false); pillCheck(); dbg();
 }
 document.addEventListener("visibilitychange", () => {
-  if (document.hidden){ if (finger.a){ finger.a = 0; finger.id = null; sendInput(true); } cancelAnimationFrame(rafId); rafId = 0; Sfx.bedStop(); return; }
+  if (document.hidden){ if (finger.a){ finger.a = 0; finger.id = null; sendInput(true); } cancelAnimationFrame(rafId); rafId = 0; Sfx.bedStop(); Crowd.halt(); return; }
+  if (G.M && G.M.newest && G.M.newest.st === C.ST_PLAY && Crowd.mode){ Sfx.bed(0.8); Crowd.run(); }   // back on the page mid-match: the crowd again
   lastT = performance.now(); if (!rafId) rafId = requestAnimationFrame(frame);
   sock.nudge(); recheck();
 });
@@ -551,12 +558,29 @@ window.addEventListener("pageshow", e => { if (e.persisted){ sock.nudge(); reche
 /* ---------- start ---------- */
 function applyHealth(h){
   if (!h || !h.ok) return;
+  if (Array.isArray(h.prizes)) G.prizeList = L3.prizeList(h.prizes);   // the names the reveal rolls through (only what the server sends)
   ticker(h);
   if (typeof h.need === "number" && h.need > 0) G.need = h.need;
   G.soloLocal = h.solo === "local"; if (G.soloLocal) G.multiRest = true;   // §8: the server asks phones to play single player on the phone
   if (h.closed){ leaveAll(); show("rest"); } else if (screen === "mode") modeState();
 }
+function mockState(){   // ?api=fake&mock=reveal|ready|holding|used|expired|ticket|nosignal|already: the voucher states for tests and demos
+  const m = Net.mode === "fake" && Q.get("mock"); if (!m) return false;
+  const n = Math.max(1, Math.min(4, +(Q.get("prize") || 4))), P = Voucher.PRIZES[n - 1], now = Date.now();
+  const res = { id: "mock", r: "win", w: 0, md: 1, sc: [1, 0], team: 0, at: now - 1000, solo: true, code: "K7M2QX", secs: 12.4, best: 1, shown: 1,
+    prize: { t: P.t, s: P.s, label: P.t + " · " + P.s }, exp: now + 15 * 60000 - 1000, used: m === "used" ? now - 3 * 60000 : null, off: 0 };
+  G.prizeList = Voucher.PRIZES.map(x => ({ t: x.t, s: x.s }));
+  if (m === "expired"){ res.exp = now - 60000; res.at = now - 16 * 60000; }
+  G.last = res; G.prize = { code: res.code, label: P.t, sub: P.s, exp: res.exp, used: res.used, off: 0 };
+  showResult(res);
+  if (m === "reveal") prizeCard(res, { reveal: 0.35 });
+  if (m === "holding") prizeCard(res, { hold: 0.5 });
+  if (m === "nosignal" || m === "already") window.__mockUse = m;   // the fake server answers the hold this way (?mock=nosignal / already)
+  if (m === "ticket"){ show("mode"); $("#ticketBtn").click(); }
+  return true;
+}
 (async function init(){
+  if (mockState()) return;
   sizePads(); lastT = performance.now(); rafId = requestAnimationFrame(frame);
   const last = Store.get(NS + "last"), pend = Store.get(NS + "pend");
   // a reload shows the last result again only while there is a prize to redeem (staff take codes for 30 min)
@@ -570,7 +594,7 @@ function applyHealth(h){
   if (pend && Date.now() - pend.at < 10 * 60000 && screen !== "rest"){
     const r = await Net.post("/result", { dev: Net.dev });
     if (L3.sameMatch(r, pend.id) && (!G.last || G.last.code !== r.code)){
-      G.solo = false; onEnd({ id: pend.id, r: r.r, code: r.code, prize: r.prize, used: r.used, exp: r.exp, why: r.why, md: r.md, sc: r.sc, team: r.team });
+      G.solo = false; onEnd({ id: pend.id, r: r.r, code: r.code, prize: r.prize, used: r.used, exp: r.exp, why: r.why, md: r.md, sc: r.sc, team: r.team, now: r.now, prizes: r.prizes });
     }
     Store.del(NS + "pend");
   }

@@ -1,32 +1,15 @@
-/* Gotcha Shootout 3v3 — drawing, from the approved mock-up rev 2: striped floodlit pitch, goal circles, nets that grow, cat-face players,
-   the puck-like ball, confetti. Draws any team size (1, 2 or 3 a side). Lite mode (slow phones): no ball trail, no floodlight pools. */
+/* Gotcha Shootout 3v3 — drawing, from the approved mock-up rev 2: striped floodlit pitch, goal circles, nets that grow, plain team-colour
+   players (owner ~05:45: no cats), the rolling football (Ball3D), confetti. Draws any team size (1, 2 or 3 a side). Lite mode (slow phones): no ball trail, no floodlight pools. */
 "use strict";
 const Draw = (() => {
-  const CATS = [
-    { id: "ok", name: "OK Gotcha", src: "../assets/img/cat-ok-gotcha-cream.webp", cx: 305, cy: 284, r: 132 },
-    { id: "bar", name: "Barista", src: "../assets/img/cat-barista-cream.webp", cx: 326, cy: 309, r: 128 },
-    { id: "whisk", name: "Whisk Rider", src: "../assets/img/cat-whisk-ride-cream.webp", cx: 450, cy: 80, r: 84 },
-    { id: "dep", name: "Matcha Deprived", src: "../assets/img/matcha-deprived-cream.webp", cx: 300, cy: 240, r: 150 }
-  ];
-  CATS.forEach(c => { c.img = new Image(); c.img.src = c.src; });
-  const LOGO = new Image(); LOGO.src = "../assets/img/logo-lockup-white.webp";   // rev 8: the logo in the centre circle
   const COL = { 0: { f: "#6fbf4a", d: "#3d7a26", name: "MATCHA", t: "Matcha" }, 1: { f: "#ffd23f", d: "#b88a00", name: "YUZU", t: "Yuzu" } };
   const REDUCED = !!(window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches);
   const K = () => Sim3.C;
   // rip = {j: 0 top net | 1 bottom net, a: 0–1}: the net shakes after a goal; hype = seconds the crowd jumps (hypeTeam -1 = everyone);
   // storm = seconds of the phone-flash storm after a goal
-  const st = { lite: false, rip: null, hype: 0, hypeTeam: -1, storm: 0 };
+  const st = { lite: false, rip: null, hype: 0, hypeTeam: -1, storm: 0, ball3: null, ballLast: null };
+  const LOGO = new Image(); LOGO.src = "../assets/img/logo-lockup-white.webp";   // rev 8: the logo in the centre circle (kept when the cats went)
 
-  const faceCache = {};
-  function faceCanvas(ci, team, px){
-    const key = ci + "-" + team + "-" + px; if (faceCache[key]) return faceCache[key];
-    const c = CATS[ci] || CATS[0]; if (!c.img.complete || !c.img.naturalWidth) return null;
-    const cv = document.createElement("canvas"); cv.width = cv.height = px; const g = cv.getContext("2d"), r = px / 2;
-    g.fillStyle = COL[team].f; g.beginPath(); g.arc(r, r, r, 0, 7); g.fill();
-    g.save(); g.beginPath(); g.arc(r, r, r * 0.86, 0, 7); g.clip(); g.fillStyle = "#173a24"; g.fillRect(0, 0, px, px);
-    g.drawImage(c.img, c.cx - c.r, c.cy - c.r, c.r * 2, c.r * 2, r - r * 0.86, r - r * 0.86, r * 1.72, r * 1.72); g.restore();
-    return faceCache[key] = cv;
-  }
   function pitch(g, gw){
     const { W, H, CREASE } = K(), stripe = H / 12;
     for (let i = 0; i < 12; i++){ g.fillStyle = i % 2 ? "#1f5a32" : "#24673a"; g.fillRect(-3, i * stripe, W + 6, stripe + 0.1); }
@@ -53,33 +36,53 @@ const Draw = (() => {
     if (!st.lite) [[0, 0], [W, 0], [0, H], [W, H]].forEach(([x, y]) => { const rg = g.createRadialGradient(x, y, 0, x, y, 40);   // floodlight pools
       rg.addColorStop(0, "#fffbe633"); rg.addColorStop(1, "#fffbe600"); g.fillStyle = rg; g.fillRect(x - 40, y - 40, 80, 80); });
   }
-  function players(g, list, S, rot, t, dpr){
-    const RP = K().RP, px = Math.max(24, Math.round(RP * 2 * S * dpr));
+  // MOCK-UP (owner ~05:45 "remove the cat … the two-player can just be different color"): a plain disc in the team colour, a white ring,
+  // a little shine, a dark rim (as the wall mock); your own keeps the YOU ring, bots keep BOT
+  function disc(g, team, RP){
+    g.fillStyle = COL[team].f; g.beginPath(); g.arc(0, 0, RP, 0, 7); g.fill();
+    // the inner ring: white on Matcha, dark on Yuzu, so the teams differ by more than colour (colour-blind players; review)
+    g.strokeStyle = team === 1 ? "#3d2a00" : "rgba(255,255,255,.9)"; g.lineWidth = RP * 0.14; g.beginPath(); g.arc(0, 0, RP * 0.62, 0, 7); g.stroke();
+    if (!st.lite){ const hl = g.createRadialGradient(-RP * 0.35, -RP * 0.4, RP * 0.1, 0, 0, RP); hl.addColorStop(0, "rgba(255,255,255,.45)"); hl.addColorStop(0.55, "rgba(255,255,255,0)"); hl.addColorStop(1, "rgba(0,0,0,.25)");
+      g.fillStyle = hl; g.beginPath(); g.arc(0, 0, RP, 0, 7); g.fill(); }
+    g.strokeStyle = COL[team].d; g.lineWidth = RP * 0.14; g.beginPath(); g.arc(0, 0, RP, 0, 7); g.stroke();
+  }
+  function players(g, list, S, rot, t){
+    const RP = K().RP;
     list.forEach(q => {
       g.save(); g.translate(q.x, q.y); if (rot) g.rotate(rot);
-      g.fillStyle = "#00000055"; g.beginPath(); g.ellipse(0.5, 0.9, RP * 0.95, RP * 0.75, 0, 0, 7); g.fill();
+      g.fillStyle = "rgba(0,0,0,.33)"; g.beginPath(); g.arc(0.5, 0.9, RP * 0.9, 0, 7); g.fill();
       if (q.me){ const pr = RP + 2.4 + (REDUCED ? 0 : Math.sin(t * 6) * 0.3); g.fillStyle = "#fffbe61f"; g.beginPath(); g.arc(0, 0, pr, 0, 7); g.fill();
         g.strokeStyle = "#fffbe6"; g.lineWidth = 0.6; g.beginPath(); g.arc(0, 0, pr, 0, 7); g.stroke(); }
-      const fc = faceCanvas(q.cat, q.team, px);
-      if (fc) g.drawImage(fc, -RP, -RP, RP * 2, RP * 2); else { g.fillStyle = COL[q.team].f; g.beginPath(); g.arc(0, 0, RP, 0, 7); g.fill(); }
-      g.strokeStyle = COL[q.team].d; g.lineWidth = 0.35; g.beginPath(); g.arc(0, 0, RP, 0, 7); g.stroke();
+      disc(g, q.team, RP);
       const txt = q.me ? "YOU" : q.label;
       if (txt){ g.font = "900 " + (q.me ? 2.3 : 1.7) + "px Nunito, sans-serif"; g.textAlign = "center"; const ty = q.me ? -RP - 3.3 : -RP - 1.2;
         g.fillStyle = "#000a"; g.fillText(txt, 0.15, ty + 0.15); g.fillStyle = q.me ? "#fffbe6" : "#ffffffb0"; g.fillText(txt, 0, ty); }
       g.restore();
     });
   }
-  function ball(g, b, trail){
+  // a room seat: the same disc on a small canvas (no cats)
+  function discCanvas(team, px){ const cv = document.createElement("canvas"); cv.width = cv.height = px; const g = cv.getContext("2d"), r = px / 2;
+    g.translate(r, r); g.scale(r / 1.1, r / 1.1); disc(g, team, 1); return cv; }
+  // MOCK-UP (owner ~05:45 "real soccer ball", ~05:48 "make the ball roll"): the shared Ball3D (assets/ball3d.js) — a 32-panel ball that
+  // turns about the axis across its travel. Drawn in the screen's own frame (a Yuzu phone draws the pitch turned 180°, so the ball turns
+  // back), so the light stays top-left; it rolls by its move since the last frame, turned into that frame. A kick-off jump never spins it.
+  function ball(g, b, trail, rot){
     const RB = K().RB;
-    if (!st.lite && !REDUCED && trail) trail.forEach(([x, y], i) => { g.fillStyle = "rgba(255,251,230," + (i / trail.length * 0.25) + ")"; g.beginPath(); g.arc(x, y, RB * (i / trail.length), 0, 7); g.fill(); });
-    g.fillStyle = "#0006"; g.beginPath(); g.ellipse(b.x + 0.4, b.y + 0.6, RB, RB * 0.8, 0, 0, 7); g.fill();
+    if (!st.lite && !REDUCED && trail) trail.forEach(([x, y], i) => { g.fillStyle = "rgba(255,251,230," + (i / trail.length * 0.2) + ")"; g.beginPath(); g.arc(x, y, RB * (i / trail.length), 0, 7); g.fill(); });
     if (b.fast && !st.lite){ g.save(); g.globalCompositeOperation = "lighter";   // the floodlights catch a moving ball
       const gl = g.createRadialGradient(b.x, b.y, RB * 0.5, b.x, b.y, RB * 3.2); gl.addColorStop(0, "rgba(255,244,214,0.35)"); gl.addColorStop(1, "rgba(255,244,214,0)");
       g.fillStyle = gl; g.beginPath(); g.arc(b.x, b.y, RB * 3.2, 0, 7); g.fill(); g.restore(); }
-    if (st.lite) g.fillStyle = "#f4f6ef"; else { const rg = g.createRadialGradient(b.x - 0.4, b.y - 0.5, 0.2, b.x, b.y, RB); rg.addColorStop(0, "#fff"); rg.addColorStop(1, "#cfd6c9"); g.fillStyle = rg; }
-    g.beginPath(); g.arc(b.x, b.y, RB, 0, 7); g.fill();
-    g.fillStyle = "#1b2a20"; g.beginPath(); g.arc(b.x + 0.2, b.y, 0.45, 0, 7); g.fill(); g.beginPath(); g.arc(b.x - 0.7, b.y - 0.6, 0.25, 0, 7); g.fill(); g.beginPath(); g.arc(b.x - 0.5, b.y + 0.75, 0.25, 0, 7); g.fill();
+    if (!st.ball3 && window.Ball3D) st.ball3 = Ball3D.create();
+    g.save(); g.translate(b.x, b.y); if (rot) g.rotate(rot);
+    if (st.ball3){
+      if (st.ballLast){ const dx = b.x - st.ballLast[0], dy = b.y - st.ballLast[1];
+        if (Math.hypot(dx, dy) < 8) Ball3D.roll(st.ball3, rot ? -dx : dx, rot ? -dy : dy, RB); }   // the move, turned into this frame
+      Ball3D.draw(g, st.ball3, 0, 0, RB);
+    } else { g.fillStyle = "#fff"; g.beginPath(); g.arc(0, 0, RB, 0, 7); g.fill(); }
+    g.restore(); st.ballLast = [b.x, b.y];
   }
+
+
 
   /* the crowd: fans in the stands round the pitch (mock-up rev 7–8, owner ~21:08): coloured circles that bob, jump with arms up on goals
      and near misses, banners and flags, phone-camera flashes (a storm after a goal). Reduced motion = a still crowd; lite = half the fans. */
@@ -147,8 +150,8 @@ const Draw = (() => {
     g.setTransform(1, 0, 0, 1, 0, 0); g.fillStyle = "#07110b"; g.fillRect(0, 0, f.w, f.h);
     const sx = shake && !REDUCED ? (Math.random() - 0.5) * shake : 0;
     g.setTransform(f.d * v.S, 0, 0, f.d * v.S, f.d * (v.ox + sx), f.d * v.oy); if (v.flip) g.rotate(Math.PI); g.translate(-W / 2, -H / 2);
-    if (vm.crowd) crowd(g, t); pitch(g, vm.gw); if (vm.ball) ball(g, vm.ball, vm.trail); players(g, vm.players, v.S, v.flip ? Math.PI : 0, t, f.d);
+    if (vm.crowd) crowd(g, t); pitch(g, vm.gw); if (vm.ball) ball(g, vm.ball, vm.trail, v.flip ? Math.PI : 0); players(g, vm.players, v.S, v.flip ? Math.PI : 0, t, f.d);
     g.setTransform(f.d, 0, 0, f.d, 0, 0); if (conf) conf.draw(g, dt);
   }
-  return { CATS, COL, REDUCED, st, faceCanvas, Confetti, view, render };
+  return { COL, REDUCED, st, discCanvas, Confetti, view, render };
 })();

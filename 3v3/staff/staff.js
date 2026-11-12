@@ -46,11 +46,13 @@ var StaffCore = (function () {
   var WHY = { cap: "used today", day: "used today", dev: "used today", phone: "used today", net: "used today", "used-today": "used today",
     hours: "outside booth hours", lost: "lost game", lose: "lost game", draw: "draw", local: "offline game", offline: "offline game", unset: "not set yet", none: "not set yet" };
   function whyText(why) { return why == null || why === "" ? "" : WHY[why] || String(why).slice(0, 40); }
+  // the prize title (§15: prize {t, s}; an older server sends {label})
+  function prizeTitle(p) { return p ? p.t || p.label || "" : ""; }
   function prizeLine(p, why) {
-    if (p && p.label) return "Prize: " + p.label;
+    if (prizeTitle(p)) return "Prize: " + prizeTitle(p);
     return why ? "No prize · " + whyText(why) : "Prize: not set yet";
   }
-  // how old the code is, for the 30-minute limit staff see (the server still refuses an old code itself)
+  // how old the code is, for the 15-minute limit staff see (the server still refuses an old code itself)
   function ago(at, now) {
     if (typeof at !== "number" || typeof now !== "number") return "";
     var m = Math.floor((now - at) / 60000);
@@ -66,13 +68,13 @@ var StaffCore = (function () {
     if (!res.ok) return { tone: "warn", head: "No answer, try again", retry: true };
     var head = res.r === "win" ? "WIN" : res.r === "lose" ? "LOSE" : res.r === "draw" ? "DRAW" : "?";
     off = off || res.local === 1 || res.local === true;
-    var prize = off ? null : res.prize, has = !!(prize && prize.label);
+    var prize = off ? null : res.prize, has = !!prizeTitle(prize);
     var lines = [modeText(res), "Played at " + clock(res.at) + ago(res.at, now), prizeLine(prize, off ? null : res.why)];
     if (has && !res.used && typeof res.exp === "number") lines.push("Valid until " + clock(res.exp));
     // the hold shows only when the server says this code carries a prize and isn't used (a no-prize code would only be refused)
     var v = { tone: "info", head: head, lines: lines, offline: off, canRedeem: has && !res.used && !off };
     if (off) v.status = { tone: "warn", head: "Offline game · no prize" };
-    else if (res.used) v.status = { tone: "bad", head: "ALREADY USED at " + clock(res.used) };
+    else if (res.used) v.status = { tone: "bad", head: "USED " + clock(res.used) + (res.used_by === "self" ? " (player)" : res.used_by === "staff" ? " (staff)" : "") };   // who: the player's HOLD TO USE, or staff here
     else if (!has) v.status = { tone: "warn", head: "No prize" };
     else v.status = { tone: "info", head: "Not used yet" };
     return v;
@@ -81,8 +83,8 @@ var StaffCore = (function () {
   function redeemView(res, ctx) {
     ctx = ctx || {};
     if (!res || res.net) return { tone: "warn", head: "No answer, try again", lines: ["Don't give the prize yet."] };
-    if (res.ok) return { tone: "ok", head: "✓ Redeemed", lines: [ctx.prize && ctx.prize.label ? "Give: " + ctx.prize.label : "Give the prize", "Used at " + clock(res.used)] };
-    if (res.status === 409 && res.e === "expired") return { tone: "bad", head: "TOO OLD (over 30 min)", lines: ["Played at " + clock(res.at != null ? res.at : ctx.at), "No prize."] };
+    if (res.ok) return { tone: "ok", head: "✓ Redeemed", lines: [prizeTitle(ctx.prize) ? "Give: " + prizeTitle(ctx.prize) : "Give the prize", "Used at " + clock(res.used)] };
+    if (res.status === 409 && res.e === "expired") return { tone: "bad", head: "TOO OLD (over 15 min)", lines: ["Played at " + clock(res.at != null ? res.at : ctx.at), "No prize."] };
     if (res.status === 409 && res.e === "no-prize") return { tone: "bad", head: "NO PRIZE", lines: [whyText(res.why || ctx.why) || "This code has no prize."] };
     if (res.status === 409) {
       var lines = ["No prize."];
@@ -135,7 +137,7 @@ if (typeof window !== "undefined" && window.document) (function () {
   var mode = SC.pickMode(asked, saved, location.hostname, location.protocol), base = SC.BASES[mode];
   try { if (asked && SC.BASES[asked]) sessionStorage.setItem("s3v3:api", asked); } catch (e) { /* no session storage */ }
   var KEY = "s3v3:" + (mode === "live" ? "" : mode === "staging" ? "stg:" : mode + ":") + "staff";
-  if (mode === "fake") { var fs = document.createElement("script"); fs.src = "fake.js?v=3"; document.head.appendChild(fs); }
+  if (mode === "fake") { var fs = document.createElement("script"); fs.src = "fake.js?v=4"; document.head.appendChild(fs); }
 
   // one server call: {status, ...json} or {net:true} after `ms` (no answer = never green)
   function post(path, body, ms) {

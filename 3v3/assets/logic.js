@@ -41,12 +41,13 @@ const CODE_ABC = "ACDEFHJKMNPQRTUVWXY34679";
 const cleanCode = s => String(s || "").toUpperCase().replace(/O/g, "0").split("").filter(c => CODE_ABC.indexOf(c) >= 0).join("").slice(0, 4);
 const goals = n => n === 1 ? "1 goal" : n + " goals";
 // the result's prize card shows only when there is something to redeem: a code and a prize name; a lost game vs the bot never (§12.3, §13)
-const hasPrize = res => !!(res && res.code && res.prize && res.prize.label && !(res.md === 1 && res.r !== "win"));
+const hasPrize = res => !!(res && res.code && res.prize && (res.prize.t || res.prize.label) && !(res.md === 1 && res.r !== "win"));   // §15: prize {t, s, label}
 // the prize ticket (adversarial S1: a code must never vanish): the newest prize is kept on its own; a later result without a prize never
 // replaces it; it shows until staff use it or it expires
 function keepPrize(stored, res){
   if (!hasPrize(res)) return stored || null;
-  return { code: res.code, label: res.prize.label, exp: res.exp || null, used: res.used || null, id: res.id || null, at: res.at || null };
+  return { code: res.code, label: res.prize.t || res.prize.label, sub: res.prize.s || null, exp: res.exp || null, used: res.used || null, id: res.id || null, at: res.at || null,
+    off: typeof res.off === "number" ? res.off : null };   // off = server clock − phone clock when the result came (the countdown runs on it)
 }
 const prizeLive = (p, now) => !!(p && p.code && !p.used && !(p.exp && now >= p.exp));
 // a result with no prize card says why, in a few words (none → nothing; a lost game vs the bot never has a prize, so no line)
@@ -86,5 +87,9 @@ function lagWindow(win, t, n, keepMs){
 const ownRate = (err, fingerMoving) => err > 8 ? 12 : err > 1.5 && !fingerMoving ? 3 : 0;
 // the server is full (err busy, 20+ people at once): ask again by itself after 3, 6, then 10 s; then give up with one word
 const BUSY_WAIT = [3000, 6000, 10000], busyWait = n => n < BUSY_WAIT.length ? BUSY_WAIT[n] : null;
-root.L3 = { busyWait, STEP_MS, lagWindow, ownRate, subLine, clockText, scoreText, deepJoin, restAfterFails, interp, stamp, shouldSend, histAt, toWorld, backoff, cleanCode, goals, hasPrize, keepPrize, prizeLive, whyLine, planB, ballAhead, isBot, sameMatch, CODE_ABC };
+// the server's prize: {t, s, label} (§15); an older server sent only label "t · s"
+const normPrize = p => !p ? null : { t: p.t || String(p.label || "").split(" · ")[0], s: p.s || (p.label && p.label.indexOf(" · ") >= 0 ? p.label.slice(p.label.indexOf(" · ") + 3) : ""), label: p.label || p.t };
+// the prize list for the reveal, as the server sends it ([[t, s], …] or [{t, s}, …]); nothing sent = no roll (never invented names)
+const prizeList = a => Array.isArray(a) ? a.map(x => Array.isArray(x) ? { t: String(x[0] || ""), s: String(x[1] || "") } : x && x.t ? { t: String(x.t), s: String(x.s || "") } : null).filter(x => x && x.t) : [];
+root.L3 = { normPrize, prizeList, busyWait, STEP_MS, lagWindow, ownRate, subLine, clockText, scoreText, deepJoin, restAfterFails, interp, stamp, shouldSend, histAt, toWorld, backoff, cleanCode, goals, hasPrize, keepPrize, prizeLive, whyLine, planB, ballAhead, isBot, sameMatch, CODE_ABC };
 })(typeof globalThis !== "undefined" ? globalThis : this);

@@ -8,15 +8,15 @@
   var now = Date.now(), M = 60000;
   var B = { paused: false, botLevel: 1 };
   var C = {
-    ACDEF3: { r: "win", md: 0, size: 2, sc: [3, 1], team: 0, at: now - 5 * M, prize: { label: "TEST Free sparkling yuzu" }, used: null },
+    ACDEF3: { r: "win", md: 0, size: 2, sc: [3, 1], team: 0, at: now - 5 * M, prize: { t: "TEST FREE Sparkling Yuzu Oolong", s: "with any 2 drinks purchased" }, used: null },
     KKKKKK: { r: "win", md: 0, size: 1, at: now - 3 * M, prize: null, why: "cap", used: null },
-    MMMMMM: { r: "win", md: 0, size: 1, at: now - 3 * M, prize: { label: "TEST $1 off" }, used: null, refuse: 1 },
-    HJKMN4: { r: "lose", md: 0, size: 1, at: now - 10 * M, prize: { label: "TEST $1 off" }, used: now - 3 * M },
-    PQRTU6: { r: "win", md: 1, size: 1, sc: [1, 0], team: 0, at: now - 2 * M, prize: { label: "TEST Free sparkling yuzu" }, used: null },
-    "L-WXY379": { r: "win", md: 1, size: 1, sc: [1, 0], team: 0, at: now - 4 * M, prize: { label: "TEST Free sparkling yuzu" }, used: null },
-    VWXY97: { r: "draw", md: 0, size: 1, at: now - 40 * M, prize: { label: "TEST $1 off" }, used: null, old: 1 },
-    CCCCCC: { r: "win", md: 0, size: 1, at: now - M, prize: { label: "TEST $1 off" }, used: null, slow: 1 },
-    DDDDDD: { r: "win", md: 1, size: 1, sc: [1, 3], at: now - M, prize: { label: "TEST $1 off" }, used: null, race: 1 },
+    MMMMMM: { r: "win", md: 0, size: 1, at: now - 3 * M, prize: { t: "TEST 10% OFF", s: "with any 3 drinks purchased" }, used: null, refuse: 1 },
+    HJKMN4: { r: "lose", md: 0, size: 1, at: now - 10 * M, prize: { t: "TEST 10% OFF", s: "with any 3 drinks purchased" }, used: now - 3 * M, used_by: "self" },
+    PQRTU6: { r: "win", md: 1, size: 1, sc: [1, 0], team: 0, at: now - 2 * M, prize: { t: "TEST FREE Sparkling Yuzu Oolong", s: "with any 2 drinks purchased" }, used: null },
+    "L-WXY379": { r: "win", md: 1, size: 1, sc: [1, 0], team: 0, at: now - 4 * M, prize: { t: "TEST FREE Sparkling Yuzu Oolong", s: "with any 2 drinks purchased" }, used: null },
+    VWXY97: { r: "draw", md: 0, size: 1, at: now - 20 * M, prize: { t: "TEST 10% OFF", s: "with any 3 drinks purchased" }, used: null, old: 1 },
+    CCCCCC: { r: "win", md: 0, size: 1, at: now - M, prize: { t: "TEST 10% OFF", s: "with any 3 drinks purchased" }, used: null, slow: 1 },
+    DDDDDD: { r: "win", md: 1, size: 1, sc: [1, 3], at: now - M, prize: { t: "TEST 10% OFF", s: "with any 3 drinks purchased" }, used: null, race: 1 },
     EEEEEE: { r: "win", md: 0, size: 2, at: now - M, prize: null, used: null }
   };
   function later(x, ms) { return new Promise(function (ok) { setTimeout(function () { ok(x); }, ms); }); }
@@ -37,8 +37,8 @@
     if (path === "/staff/check") {
       if (b.code === "EEEEEE") return never(ms);
       if (!c) return later({ ok: false, e: "not-found", status: 404 }, t);
-      return later({ ok: true, status: 200, r: c.r, md: c.md, size: c.size, sc: c.sc, team: c.team, at: c.at, prize: c.prize, used: c.used, why: c.why,
-        exp: c.at + 30 * M, local: b.code.indexOf("L-") >= 0 ? 1 : 0 }, t);
+      return later({ ok: true, status: 200, r: c.r, md: c.md, size: c.size, sc: c.sc, team: c.team, at: c.at, prize: c.prize, used: c.used, used_by: c.used_by || (c.used ? "staff" : null), why: c.why,
+        exp: c.at + 15 * M, local: b.code.indexOf("L-") >= 0 ? 1 : 0 }, t);
     }
     if (path === "/staff/redeem") {
       if (!c) return later({ ok: false, e: "not-found", status: 404 }, t);

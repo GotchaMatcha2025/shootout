@@ -20,6 +20,10 @@ a{color:var(--yuzu)}
 .scr>*{position:relative;flex-shrink:0}
 .scr>.bgpitch{position:absolute;top:0;right:0;bottom:0;left:0;width:100%;height:100%;opacity:.38;filter:saturate(.9);pointer-events:none}
 .logo{width:132px;height:auto;margin-top:6px}
+/* owner 13 Nov ~06:50: "make the gotcha matcha font size bigger … make it pop": the home logo twice the size, with a breathing green glow */
+.logo.hero{width:260px;max-width:72vw;margin-top:14px;filter:drop-shadow(0 0 10px rgba(155,226,122,.75)) drop-shadow(0 2px 0 rgba(0,0,0,.5));animation:logoGlow 2.4s ease-in-out infinite}
+@keyframes logoGlow{50%{filter:drop-shadow(0 0 22px rgba(155,226,122,.95)) drop-shadow(0 2px 0 rgba(0,0,0,.5))}}
+@media (prefers-reduced-motion:reduce){.logo.hero{animation:none}}
 .title{font:400 54px/.92 var(--f-display);margin:8px 0 0;letter-spacing:1px;text-shadow:0 0 24px #6fbf4a66,0 4px 0 #0008}
 .title small{display:block;font-size:30px;color:var(--yuzu);letter-spacing:3px;margin-top:4px}
 .lede{font:800 19px/1.3 var(--f-body);margin:0;max-width:320px}
@@ -27,7 +31,7 @@ a{color:var(--yuzu)}
 .btn{appearance:none;border:0;cursor:pointer;font:900 19px/1 var(--f-body);color:var(--night);background:var(--matcha);border-radius:16px;padding:18px 20px;width:100%;max-width:420px;
   min-height:52px;box-shadow:0 5px 0 var(--matcha-d),0 0 30px #6fbf4a55;transition:transform .08s;text-decoration:none;display:flex;align-items:center;justify-content:center;gap:8px}
 .btn:active{transform:translateY(3px);box-shadow:0 2px 0 var(--matcha-d)}
-.btn:focus-visible,.card:focus-visible,.team:focus-visible,.sbtn:focus-visible,.lnk:focus-visible{outline:3px solid var(--flood);outline-offset:3px}
+.btn:focus-visible,.team:focus-visible,.sbtn:focus-visible,.lnk:focus-visible{outline:3px solid var(--flood);outline-offset:3px}
 .btn.y{background:var(--yuzu);box-shadow:0 5px 0 var(--yuzu-d),0 0 30px #ffd23f44}
 .btn.ghost{background:transparent;color:var(--cream);box-shadow:inset 0 0 0 2px #ffffff40}
 .btn[disabled]{opacity:.35;cursor:not-allowed}
@@ -62,10 +66,6 @@ a{color:var(--yuzu)}
 .err{margin:0;color:var(--night);background:var(--danger);font:900 14px/1.3 var(--f-body);padding:10px 12px;border-radius:12px;width:100%;max-width:420px}
 
 /* pick */
-.cards{display:grid;grid-template-columns:1fr 1fr;gap:10px;width:100%;max-width:420px}
-.card{appearance:none;cursor:pointer;border:2px solid #ffffff1f;background:#10251a;border-radius:16px;padding:8px 6px 10px;color:var(--cream);display:flex;flex-direction:column;align-items:center;gap:4px;font:900 14px/1.1 var(--f-body)}
-.card img{width:100%;height:92px;object-fit:contain;pointer-events:none}
-.card[aria-pressed="true"]{border-color:var(--matcha);background:#1b3d27;box-shadow:0 0 0 3px #6fbf4a44,0 0 24px #6fbf4a55}
 .teams{display:grid;grid-template-columns:1fr 1fr;gap:10px;width:100%;max-width:420px}
 .team{appearance:none;cursor:pointer;border:0;border-radius:16px;padding:16px 8px;min-height:60px;font:900 18px/1.1 var(--f-body);color:var(--night);display:flex;flex-direction:column;gap:6px;align-items:center;justify-content:center}
 .team.m{background:var(--matcha);box-shadow:0 5px 0 var(--matcha-d)}
@@ -131,7 +131,7 @@ a{color:var(--yuzu)}
 .prize .used{font:900 15px/1.2 var(--f-body);color:#fff;background:#7a2a20;border-radius:10px;padding:8px 10px;text-align:center}
 .prize.is-used .code{opacity:.4;text-decoration:line-through}
 .prize .s{font:800 15px/1.3 var(--f-body)}
-@media (max-height:640px){.title{font-size:44px}.count{font-size:72px}.card img{height:70px}.big{font-size:42px}}
+@media (max-height:640px){.title{font-size:44px}.count{font-size:72px}.big{font-size:42px}}
 @media (prefers-reduced-motion:reduce){.btn,.banner{transition:none}.fing{animation:none}}
 
 /* ---------- mock-up rev 5–8 (owner yes ~21:48): the stadium skin ---------- */
@@ -159,21 +159,13 @@ a{color:var(--yuzu)}
 @keyframes tick{to{transform:translateX(-50%)}}
 .title{font:400 52px/1 var(--f-display);margin:2px 0 0;letter-spacing:1px;background:linear-gradient(180deg,#fffbe6 30%,#c9f0b0);-webkit-background-clip:text;background-clip:text;color:transparent;
   filter:drop-shadow(0 3px 0 #0a1a10) drop-shadow(0 0 18px #6fbf4a88);white-space:nowrap;text-shadow:none}
-.ballo{display:inline-block;width:.72em;height:.72em;margin:0 .02em;vertical-align:-.04em;border-radius:50%;
-  background:radial-gradient(circle at 50% 50%,#1b2a20 0 16%,transparent 17%),radial-gradient(circle at 15% 30%,#1b2a20 0 11%,transparent 12%),
-  radial-gradient(circle at 85% 30%,#1b2a20 0 11%,transparent 12%),radial-gradient(circle at 30% 88%,#1b2a20 0 11%,transparent 12%),
-  radial-gradient(circle at 72% 88%,#1b2a20 0 11%,transparent 12%),radial-gradient(circle at 35% 30%,#fff,#cfd6c9);animation:spin 2.4s linear infinite}
+.ballo{display:inline-block;position:relative;width:.72em;height:.72em;margin:0 .02em;vertical-align:-.04em}   /* the rolling football (assets/titleballs.js) */
+.ballo canvas{position:absolute;left:0;top:0;width:100%;height:100%}
 @keyframes spin{to{transform:rotate(360deg)}}
 .chip{font:900 12px/1 var(--f-body);letter-spacing:1.2px;padding:8px 12px;border-radius:999px;background:#000a;border:1px solid #ffffff2a;color:var(--cream)}
 .btn.kick{font:400 30px/1 var(--f-display);letter-spacing:1px;padding:20px;background:linear-gradient(180deg,#8fdc66,#5aa83a);position:relative;overflow:visible}
 .btn.kick::after{content:"";position:absolute;top:-6px;left:-6px;right:-6px;bottom:-6px;border-radius:20px;border:3px solid #9be27a;animation:ring 1.6s ease-out infinite;pointer-events:none}
 @keyframes ring{from{opacity:.9;transform:scale(.96)}to{opacity:0;transform:scale(1.08)}}
-/* trading-card cats */
-.card{position:relative;overflow:hidden;background:linear-gradient(160deg,#2f6a40,#0f2a18 60%,#0a1d11);border:2px solid #d9b65a;box-shadow:inset 0 0 0 2px #0008,0 6px 14px #0008}
-.card .num{position:absolute;top:6px;left:8px;font:400 22px/1 var(--f-display);color:#ffd23f;text-shadow:0 2px 0 #000a}
-.card::after{content:"";position:absolute;top:-50%;left:-80%;width:50%;height:200%;background:linear-gradient(90deg,transparent,#ffffff40,transparent);transform:rotate(20deg);animation:shine 3.2s ease-in-out infinite;pointer-events:none}
-@keyframes shine{0%,60%{left:-80%}100%{left:140%}}
-.card[aria-pressed="true"]{border-color:#ffd23f;transform:scale(1.04);box-shadow:0 0 0 3px #ffd23f66,0 0 26px #ffd23f66}
 /* mode cards */
 .mode{position:relative;overflow:hidden;flex-direction:row;align-items:center;justify-content:space-between;min-height:132px;padding:18px}
 .mode.bot{background:linear-gradient(135deg,#1d3b27,#0c1a10);color:var(--cream);box-shadow:inset 0 0 0 2px #6fbf4a88,0 0 26px #6fbf4a44}
@@ -194,14 +186,68 @@ a{color:var(--yuzu)}
 .trophy[hidden]{display:none!important}
 .big{margin-top:0}
 .pb{margin:0;font:400 22px/1 var(--f-display);color:var(--yuzu);text-shadow:0 0 12px #ffd23f88}
-.sadcat{width:140px;height:auto;margin-top:6px;filter:drop-shadow(0 0 12px #000)}
 .prize{border-radius:16px;background:linear-gradient(180deg,#fffbe6,#f3ead6);
   -webkit-mask:radial-gradient(circle 12px at 0 62%,#0000 98%,#000) left/51% 100% no-repeat,radial-gradient(circle 12px at 100% 62%,#0000 98%,#000) right/51% 100% no-repeat;
   mask:radial-gradient(circle 12px at 0 62%,#0000 98%,#000) left/51% 100% no-repeat,radial-gradient(circle 12px at 100% 62%,#0000 98%,#000) right/51% 100% no-repeat}
 .prize .tkt{font:900 11px/1 var(--f-body);letter-spacing:2px;color:#4a5b4f;text-align:center}
 .prize .code{border-top:2px dashed #0003;margin-top:10px;padding-top:14px;background:none;color:var(--night);font-size:34px}
-@media (max-height:700px){.trophy{font-size:60px}.trophy::before{width:180px;height:180px;margin:-90px 0 0 -90px}.sadcat{width:100px}.mode{min-height:112px}.mart img{width:76px}}
+@media (max-height:700px){.trophy{font-size:60px}.trophy::before{width:180px;height:180px;margin:-90px 0 0 -90px}.mode{min-height:112px}}
 /* slow phones: no sweeping light or flash pops; reduced motion: a still stadium */
 .lite .beam,.lite .stadium .flash{display:none}
-.lite .card::after,.lite .ticker span{animation:none}
-@media (prefers-reduced-motion:reduce){#s-home .bgpitch{display:none}.beam,.ticker span,.ballo,.btn.kick::after,.card::after,.trophy::before{animation:none}.stadium .flash{display:none}.spin{animation:none}}
+.lite .ticker span{animation:none}
+@media (prefers-reduced-motion:reduce){#s-home .bgpitch{display:none}.beam,.ticker span,.btn.kick::after,.trophy::before{animation:none}.stadium .flash{display:none}.spin{animation:none}}
+
+/* ---------- the prize voucher (owner 13 Nov ~05:22 + ~05:30) ---------- */
+.prize.vcard{position:relative;overflow:hidden;align-items:center;text-align:center;gap:6px;padding:16px 16px 18px;transform-origin:50% 50%}
+.vtag{font:900 11px/1 var(--f-body);letter-spacing:2px;color:#4a5b4f}
+.vtitle{font:400 27px/1.05 var(--f-display);color:var(--night);text-wrap:balance}
+.vtitle.rolling{opacity:.75;filter:blur(.6px)}
+.vsub{font:800 14px/1.3 var(--f-body);color:#33433a;max-width:300px}
+.vclock{font:900 15px/1 var(--f-body);color:#33433a;margin-top:4px}
+.vclock b{font:400 30px/1 var(--f-display);color:var(--night);font-variant-numeric:tabular-nums;vertical-align:-3px}
+.vcode{font:900 14px/1 ui-monospace,Menlo,monospace;letter-spacing:3px;color:#6b7a70}
+.vhold{position:relative;overflow:hidden;width:100%;min-height:58px;margin-top:6px;border:0;border-radius:14px;cursor:pointer;background:var(--matcha);color:var(--night);
+  font:900 19px/1 var(--f-body);letter-spacing:1px;box-shadow:0 5px 0 var(--matcha-d);user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;touch-action:none}
+.vhold span{position:relative}
+.vhold .vfill{position:absolute;top:0;left:0;bottom:0;width:100%;background:#2f6b1c;transform:scaleX(0);transform-origin:0 50%}
+.vhold.down{transform:translateY(3px);box-shadow:0 2px 0 var(--matcha-d)}
+.vhold.down span{color:#fffbe6}
+.vshine{position:absolute;top:-40%;bottom:-40%;width:38%;left:-60%;background:linear-gradient(100deg,transparent,#ffffffcc 50%,transparent);transform:skewX(-16deg);
+  animation:vshine 2.6s ease-in-out infinite;pointer-events:none;mix-blend-mode:soft-light}
+@keyframes vshine{0%{left:-60%}70%,100%{left:130%}}
+.vstamp{display:none;position:absolute;left:50%;top:44%;transform:translate(-50%,-50%) rotate(-14deg);padding:6px 18px;border:6px solid;border-radius:10px;
+  font:400 56px/1 var(--f-display);letter-spacing:3px;background:#fffbe6d9;pointer-events:none}
+.vwhen{display:none;font:900 16px/1 var(--f-body);color:#b3261e}
+.vcard[data-st="used"] .vstamp{display:block;color:#c62828;border-color:#c62828}
+.vcard[data-st="expired"] .vstamp{display:block;color:#7a7a7a;border-color:#7a7a7a;font-size:46px}
+.vcard[data-st="used"] .vwhen{display:block}
+.vcard[data-st="used"] .vhold,.vcard[data-st="expired"] .vhold,.vcard[data-st="used"] .vclock,.vcard[data-st="expired"] .vclock,
+.vcard[data-st="used"] .vshine,.vcard[data-st="expired"] .vshine{display:none}
+.vcard[data-st="used"] .vtitle,.vcard[data-st="used"] .vsub,.vcard[data-st="expired"] .vtitle,.vcard[data-st="expired"] .vsub{opacity:.45}
+@media (max-height:700px){.prize.vcard{gap:4px;padding:12px 14px 14px}.vtitle{font-size:23px}.vclock b{font-size:24px}.vhold{min-height:52px}#s-result .trophy{font-size:48px}#s-result .big{font-size:46px}}
+@media (prefers-reduced-motion:reduce){.vshine{animation:none;display:none}}
+
+/* voucher, after the adversarial pass */
+.vone{font:900 12px/1 var(--f-body);letter-spacing:1px;color:#6b7a70;text-transform:uppercase}
+.vmsg{width:100%;margin:2px 0 0;padding:8px 10px;border-radius:10px;background:#c62828;color:#fff;font:900 14px/1.3 var(--f-body)}
+.vcard[data-st="used"] .vone,.vcard[data-st="expired"] .vone{opacity:.45}
+@media (max-height:700px){   /* 375×667: the voucher and the buttons on one screen */
+  #s-result{gap:8px;padding-top:calc(var(--st) + 14px)}
+  #s-result .trophy{font-size:40px;margin-top:0}#s-result .trophy::before{width:150px;height:150px;margin:-75px 0 0 -75px}
+  #s-result .big{font-size:40px}#s-result .pb{font-size:17px}#rEyebrow{font-size:15px}
+  .prize.vcard{gap:3px;padding:10px 12px 12px}.vtitle{font-size:21px}.vsub{font-size:13px}.vclock b{font-size:22px}.vhold{min-height:48px;margin-top:4px}
+  #s-result .btn{padding:14px 16px;min-height:48px}
+}
+
+/* no cat on the VS BOT card (owner ~05:45): a big football */
+.mart.big{font-size:64px;line-height:1;filter:drop-shadow(0 0 12px #6fbf4a)}
+
+/* ---------- Friends = create / join; a room of 2–4 (owner ~05:36) ---------- */
+.mode.pick{min-height:104px;background:linear-gradient(135deg,#1d3b27,#0c1a10);color:var(--cream);box-shadow:inset 0 0 0 2px #6fbf4a88,0 0 22px #6fbf4a33}
+.mode.pick.y{background:linear-gradient(135deg,#ffe06a,#f0b700);color:var(--night);box-shadow:0 5px 0 var(--yuzu-d)}
+#s-multi .h2{margin-top:40px}
+#s-code .coderow{margin-top:16px}
+.slot.bot{border:1px dashed #ffd23f88;color:var(--yuzu);justify-content:center;font-size:22px;background:#ffd23f12}
+.slot{cursor:default}
+#startGo[disabled]{opacity:.35;box-shadow:none}
+.slot.empty{border:0;background:#ffffff0a}   /* a plain free seat (no "+") */

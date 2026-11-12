@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Gotcha Shootout · Big screen</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;900&family=Bowlby+One&display=swap">
+<style>
+/* The big screen: one canvas, letterboxed 16:9. Old TV browsers: top/left, no `inset`, no newer CSS. */
+/* the hand-drawn GOAL banner (the website's lettering); a missing file falls back to the next source, then to Bowlby One */
+@font-face{font-family:"Gotcha";src:url(../../assets/fonts/gotcha.woff?v=1) format("woff"),url(../assets/fonts/gotcha.woff?v=1) format("woff");font-display:swap}
+html,body{margin:0;height:100%;background:#000;overflow:hidden;color:#fffbe6;font-family:Nunito,"Arial Rounded MT Bold",Arial,sans-serif}
+#wall{position:absolute;top:0;left:0;display:block}
+#ctl{position:fixed;z-index:5;bottom:9%;left:50%;-webkit-transform:translateX(-50%);transform:translateX(-50%);white-space:nowrap;opacity:0;transition:opacity .6s;pointer-events:none}
+#ctl.show{opacity:1;pointer-events:auto}
+#ctl button{border:0;border-radius:999px;background:#fffbe6;color:#0b1a10;font:900 22px/1 Nunito,Arial,sans-serif;padding:14px 24px;margin:0 6px;cursor:pointer}
+#ctl button:focus{outline:5px solid #6fbf4a;outline-offset:2px}
+#status{position:fixed;z-index:4;top:12px;right:16px;font:900 13px/1 Nunito,Arial,sans-serif;letter-spacing:1px;color:#9db5a3}
+#net{display:inline-block;width:12px;height:12px;border-radius:50%;background:#6b6b6b;vertical-align:-1px;margin-left:8px}
+#net.on{background:#6fbf4a}
+#test{background:#ffd23f;color:#0b1a10;padding:4px 8px;border-radius:4px}
+@media (prefers-reduced-motion:reduce){#ctl{transition:none}}
+</style>
+</head>
+<body>
+<canvas id="wall" width="1920" height="1080" aria-label="Gotcha Shootout: the match on the big screen. Scan the banner QR to play."></canvas>
+<div id="ctl"><button id="sound" type="button">🔈 Sound on</button><button id="full" type="button">Full screen</button></div>
+<div id="status"><span id="test" hidden></span><i id="net" aria-hidden="true"></i></div>
+<!-- old TV browsers have no globalThis; sim.js sets globalThis.Sim3 -->
+<script>if (typeof globalThis === "undefined") window.globalThis = window;</script>
+<script src="../assets/sim.js?v=7"></script>
+<script src="../../assets/vendor/qrcode.min.js?v=1"></script>
+<script src="../assets/ball3d.js?v=1"></script>
+<script src="wall.js?v=9"></script>
+</body>
+</html>

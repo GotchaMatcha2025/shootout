@@ -20,6 +20,10 @@ a{color:var(--yuzu)}
 .scr>*{position:relative;flex-shrink:0}
 .scr>.bgpitch{position:absolute;top:0;right:0;bottom:0;left:0;width:100%;height:100%;opacity:.38;filter:saturate(.9);pointer-events:none}
 .logo{width:132px;height:auto;margin-top:6px}
+/* owner 13 Nov ~06:50: "make the gotcha matcha font size bigger … make it pop": the home logo twice the size, with a breathing green glow */
+.logo.hero{width:260px;max-width:72vw;margin-top:14px;filter:drop-shadow(0 0 10px rgba(155,226,122,.75)) drop-shadow(0 2px 0 rgba(0,0,0,.5));animation:logoGlow 2.4s ease-in-out infinite}
+@keyframes logoGlow{50%{filter:drop-shadow(0 0 22px rgba(155,226,122,.95)) drop-shadow(0 2px 0 rgba(0,0,0,.5))}}
+@media (prefers-reduced-motion:reduce){.logo.hero{animation:none}}
 .title{font:400 54px/.92 var(--f-display);margin:8px 0 0;letter-spacing:1px;text-shadow:0 0 24px #6fbf4a66,0 4px 0 #0008}
 .title small{display:block;font-size:30px;color:var(--yuzu);letter-spacing:3px;margin-top:4px}
 .lede{font:800 19px/1.3 var(--f-body);margin:0;max-width:320px}

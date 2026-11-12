@@ -47,6 +47,8 @@ a{color:var(--yuzu)}
 .offb{position:absolute;left:50%;top:calc(var(--st) + 58px);transform:translateX(-50%);z-index:6;background:#000c;color:var(--yuzu);font:900 12px/1 var(--f-body);letter-spacing:.5px;padding:7px 10px;border-radius:999px;pointer-events:none;white-space:nowrap}
 .pill{position:absolute;left:50%;top:calc(var(--st) + 58px);transform:translateX(-50%);z-index:40;background:var(--danger);color:var(--night);font:900 14px/1 var(--f-body);
   padding:10px 16px;border-radius:999px;box-shadow:0 6px 20px #0008;white-space:nowrap;pointer-events:none}
+.pill.busy{background:var(--yuzu)}
+.spin{display:inline-block;width:12px;height:12px;margin-right:8px;vertical-align:-2px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:spin .8s linear infinite}
 .dbg{position:absolute;left:calc(var(--sl) + 8px);bottom:calc(var(--sb) + 30px);z-index:41;background:#000c;color:#9f9;font:700 11px/1.3 ui-monospace,Menlo,monospace;padding:4px 6px;border-radius:6px;pointer-events:none;white-space:pre}
 
 /* join */
@@ -202,4 +204,4 @@ a{color:var(--yuzu)}
 /* slow phones: no sweeping light or flash pops; reduced motion: a still stadium */
 .lite .beam,.lite .stadium .flash{display:none}
 .lite .card::after,.lite .ticker span{animation:none}
-@media (prefers-reduced-motion:reduce){#s-home .bgpitch{display:none}.beam,.ticker span,.ballo,.btn.kick::after,.card::after,.trophy::before{animation:none}.stadium .flash{display:none}}
+@media (prefers-reduced-motion:reduce){#s-home .bgpitch{display:none}.beam,.ticker span,.ballo,.btn.kick::after,.card::after,.trophy::before{animation:none}.stadium .flash{display:none}.spin{animation:none}}

@@ -8,7 +8,7 @@ const CONFIG = {
   instagram: "https://www.instagram.com/gotchamatcha.sg/",
   delayMs: 100,              // others: drawn this far behind the newest snapshot (rides over 4G jitter)
   aheadMaxMs: 150,           // ball: drawn at most this far ahead of its newest snapshot (CTO G1 §9.1)
-  inputMs: 33,               // finger: at most 30 messages a second
+  inputMs: 50,               // finger: at most 20 messages a second (09:00 release, 20+ people at once; prediction keeps the player on the finger)
   soloConnectMs: 6000,       // single player: no server by then → the match runs on the phone (plan B)
   resultKeepMs: 30 * 60000   // a result shows again on reload while staff can still take it (codes expire after 30 min, §9.6)
 };
@@ -21,7 +21,7 @@ const buzz = p => { try { if (navigator.vibrate) navigator.vibrate(p); } catch (
 const ERRS = { "no-room": "No game", "room-full": "Full", started: "Started", busy: "Busy", bad: "Try again" };   // one short line (§13)
 
 let screen = "home";
-function show(n){ screen = n; if (n === "pick") G.catLock = false; SCREENS.forEach(s => { $("#s-" + s).hidden = s !== n; }); $("#stadium").hidden = n === "match"; if (n === "home" && tickerAt) homeTicker(); if (n === "mode") modeState(); if (n === "match") sizePads(); pillCheck(); ticketState(); }
+function show(n){ const was = screen; screen = n; if (n === "pick") G.catLock = false; if (n === "rest" && was !== "rest"){ restN = 0; setTimeout(restLoop, 0); } SCREENS.forEach(s => { $("#s-" + s).hidden = s !== n; }); $("#stadium").hidden = n === "match"; if (n === "home" && tickerAt) homeTicker(); if (n === "mode") modeState(); if (n === "match") sizePads(); pillCheck(); ticketState(); }
 function toast(msg, ms){ const t = $("#toast"); t.textContent = msg; t.hidden = false; clearTimeout(toast.h); toast.h = setTimeout(() => { t.hidden = true; }, ms || 2200); }
 
 const G = { cat: Store.get("s3v3:cat"), joined: !!Store.get("s3v3:joined"), want: null, phase: "idle", solo: false, local: false, everUp: false,
@@ -68,11 +68,26 @@ function onMsg(m){
 function onErr(m){
   if (m.m === "closed"){ leaveAll(); show("rest"); return; }   // kill switch (§9.5); also an older tab of this phone (the newest wins)
   if (G.phase === "match") return;
+  if (m.m === "busy" && screen !== "result" && (G.phase === "asking" || G.solo)){   // full: "Full · 1 sec", then the same ask again by itself
+    const solo = G.solo, want = G.want, again = solo ? () => startSolo() : () => ask(want);
+    leaveAll(); show(solo || !want || want.t !== "create" ? "mode" : "multi");   // the code typed in the box stays
+    if (busyStart(again)) return;
+  }
   // a room that closes (no rematch in 60 s) must never take the prize code off the result screen
   if (screen === "result"){ G.room = null; G.phase = "idle"; G.rematch = false; sock.stop(); return; }
   if (G.solo){ leaveAll(); show("mode"); toast(ERRS[m.m] || ERRS.bad); return; }
   leaveAll(); show("mode"); const e = $("#codeErr"); e.textContent = ERRS[m.m] || ERRS.bad; e.hidden = false;
 }
+
+/* ---------- full server: a spinner pill, the same ask again after 3 / 6 / 10 s; any tap of the player's own cancels it ---------- */
+function busyStart(again){
+  const n = G.busy ? G.busy.n : 0, wait = L3.busyWait(n);
+  if (G.busy) clearTimeout(G.busy.timer);
+  if (wait === null){ G.busy = null; $("#busy").hidden = true; return false; }
+  G.busy = { n: n + 1, timer: setTimeout(again, wait) }; $("#busy").hidden = false; return true;
+}
+function busyStop(){ if (G.busy) clearTimeout(G.busy.timer); G.busy = null; $("#busy").hidden = true; }
+document.addEventListener("click", e => { const b = e.target.closest("button, a.btn, .card"); if (G.busy && b && b.id !== "soundBtn" && b.id !== "ticketBtn") busyStop(); }, true);
 
 /* ---------- home, join step, cat, mode ---------- */
 $("#goJoin").addEventListener("click", () => { if (G.joined) afterJoinStep(); else show("join"); });
@@ -149,6 +164,7 @@ function playLocal(){
 
 /* ---------- room ---------- */
 function onRoom(m){
+  busyStop();
   if (G.phase === "match") return;
   if (m.booth && G.phase === "idle") return;   // a booth room is single-use: after its match it is never a rematch room
   G.room = m; G.room.fresh = true; clearTimeout(G.roomTimer);
@@ -201,7 +217,7 @@ const pitchCv = $("#pitch");
 const finger = { x: C.W / 2, y: C.H * 0.8, a: 0, id: null };
 let lastSent = null, seq = 0, V = null, shake = 0, freeze = 0, padTop = 54, padBot = 12;
 function onStart(m){
-  clearTimeout(G.soloTimer);
+  clearTimeout(G.soloTimer); busyStop();
   if (G.M && G.M.id === m.id){ G.M.you = m.you; G.M.lastSnapT = performance.now(); if (screen !== "match") show("match"); return; }   // re-sent after a reconnect: carry on
   const size = m.size || (m.cats && m.cats[0] ? m.cats[0].length : 3);
   G.M = { id: m.id, you: m.you, md: m.md ? 1 : 0, need: m.need || (m.md ? G.need : 1), secs: m.secs || C.MATCH_S, at: m.at, size, cats: m.cats || [[], []], bots: m.bots || [[], []],
@@ -249,7 +265,9 @@ function onEv(m){
       const mine = m.w === me;
       const botGoal = M.md && !mine;
       if (mine && M.newest) M.goalTl = M.newest.tl;   // for the personal best
-      banner(botGoal ? "🤖 GOAL!" : "GOAL!", M.md ? "" : L3.scoreText(M.sc, 0, 1), botGoal ? 1400 : 0); hudSet(true);   // multiplayer: the score under it, Matcha – Yuzu like the HUD lights(m.w, !botGoal, botGoal ? 1 - me : -1);
+      // multiplayer: the score under GOAL! (Matcha – Yuzu, like the HUD); then the lights for every goal
+      banner(botGoal ? "🤖 GOAL!" : "GOAL!", M.md ? "" : L3.scoreText(M.sc, 0, 1), botGoal ? 1400 : 0); hudSet(true);
+      lights(m.w, !botGoal, botGoal ? 1 - me : -1);
       Sfx.play("whistle"); Sfx.play("horn"); Sfx.play("roar"); Sfx.play("net"); Sfx.bed(1.6); setTimeout(() => Sfx.bed(0.8), 2500);   // every goal
       if (mine) Sfx.play("fanfare");
       buzz(botGoal ? [40, 30, 40] : [60, 40, 90]); break; }
@@ -376,7 +394,7 @@ function onEnd(m){
   const res = { id: m.id, r: m.r, w: m.w, code: m.code || null, prize: m.prize || null, md: m.md !== undefined ? (m.md ? 1 : 0) : (M ? M.md : 0),
     sc: Array.isArray(m.sc) ? m.sc : M ? M.sc : null, team, at: Date.now(), used: m.used || null, solo: G.solo, exp: m.exp || null, why: m.why || null,
     booth: !!(G.room && G.room.booth),   // a booth room is single-use: the server opens a new one at kick-off
-    secs: M && typeof M.goalTl === "number" ? Math.round(((M.secs || C.MATCH_S) * 1000 - M.goalTl) / 100) / 10 : null };   // seconds to the winning goal
+    secs: M && M.md && typeof M.goalTl === "number" ? Math.round(((M.secs || C.MATCH_S) * 1000 - M.goalTl) / 100) / 10 : null };   // personal best: single player only   // seconds to the winning goal
   G.last = res; Store.set(NS + "last", res); Store.del(NS + "pend");
   const kept = L3.keepPrize(G.prize, res); if (kept !== G.prize){ G.prize = kept; Store.set(NS + "prize", kept); }   // a later no-prize result never replaces it
   G.M = null; clearTimeout(G.soloTimer);
@@ -391,7 +409,7 @@ function showResult(res){
   $("#rTitle").textContent = win ? "WIN!" : res.r === "draw" ? "DRAW" : "LOSE";
   $("#trophy").hidden = !win; $("#sadcat").hidden = win;   // rev 8: the trophy with rays, or the sad cat
   // personal best on this phone: the fastest winning goal ("⚡ 12.4s · 🏅 BEST")
-  const pb = $("#pb"); pb.hidden = !(win && res.secs > 0);
+  const pb = $("#pb"); pb.hidden = !(win && res.md === 1 && res.secs > 0);
   if (!pb.hidden){ const best = Store.get(NS + "best"), isBest = !(best > 0) || res.secs < best; if (isBest && !res.shown) Store.set(NS + "best", res.secs);
     pb.textContent = "⚡ " + res.secs.toFixed(1) + "s" + (isBest || res.best ? " · 🏅 BEST" : ""); if (isBest) res.best = 1; res.shown = 1; }
   $("#rEyebrow").textContent = ch ? "🤖 " + (sc[1 - me] || 0) + " – " + (sc[me] || 0) + " YOU" : (sc[me] || 0) + " – " + (sc[1 - me] || 0);
@@ -445,7 +463,10 @@ $("#again").addEventListener("click", () => {
   G.rematch = true; $("#again").disabled = true; send({ t: "rematch" }); show("lobby"); renderRoom();
 });
 $("#back").addEventListener("click", () => { if (G.room) send({ t: "leave" }); leaveAll(); show("mode"); });
-$("#restRetry").addEventListener("click", async () => { const h = await Net.health(); applyHealth(h); if (!(h && h.closed)) show("home"); });
+async function restCheck(){ const h = await Net.health(); if (screen !== "rest") return; if (h && h.ok && !h.closed){ applyHealth(h); show(G.joined ? "mode" : "home"); return true; } return false; }
+$("#restRetry").addEventListener("click", () => { restCheck(); });
+let restN = 0, restT = 0;   // resting: ask the server again after 3, 6, 10 s, then every 10 s; back to the choice screen (code kept) when it is open
+function restLoop(){ clearTimeout(restT); if (screen !== "rest") return; restT = setTimeout(async () => { if (screen !== "rest") return; restN++; if (!(await restCheck())) restLoop(); }, L3.busyWait(restN) || 10000); }
 
 /* ---------- sound, reconnect pill, debug, lite ---------- */
 function soundBtn(){ const b = $("#soundBtn"); b.textContent = Sfx.on ? "🔊" : "🔇"; b.setAttribute("aria-pressed", String(Sfx.on)); b.setAttribute("aria-label", Sfx.on ? "Sound on" : "Sound off"); }

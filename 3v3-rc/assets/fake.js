@@ -10,7 +10,8 @@ const Fake = (() => {
   const SKEW = FAKE ? 2345 : 0;                                        // a wrong phone clock on purpose: the countdowns must still be right
   const FRIENDS = Q.get("friends") !== "0", SOLO_SIZE = +(Q.get("solo") || 1) === 3 ? 3 : 1;
   const PRIZE = Q.get("prize") === "1" ? { win: "TEST FREE MATCHA", lose: "TEST $1 OFF", draw: "TEST $1 OFF" } : null;   // ?prize=1: labels as staging TEST
-  const WHY = Q.get("why");   // ?why=used|hours|offline|cap|none: no prize, for this reason
+  const WHY = Q.get("why");
+  let busyLeft = +(Q.get("busy") || 0);   // ?busy=N: the first N asks (solo / create / join) answer "busy"   // ?why=used|hours|offline|cap|none: no prize, for this reason
   const need = () => (globalThis.Sim3 && Sim3.C.CHALLENGE_GOALS) || 1;   // one goal beats the Matcha Bot (owner 12 Nov ~20:34, §11)
   const ABC = "ACDEFHJKMNPQRTUVWXY34679", now = () => Date.now() + SKEW, S = () => globalThis.Sim3;
   const code = n => { let c = ""; for (let i = 0; i < n; i++) c += ABC[Math.floor(Math.random() * ABC.length)]; return c; };
@@ -150,6 +151,7 @@ const Fake = (() => {
 
   function recv(m){
     if (!m || typeof m !== "object") return;
+    if ((m.t === "hello" || m.t === "create" || m.t === "join") && busyLeft > 0 && !match){ busyLeft--; out({ t: "err", m: "busy" }); return; }
     switch (m.t){
       case "ping": out({ t: "pong", c: m.c, s: now() }); break;
       case "in": nIn++; lastIn = m; if (match && !match.bot && Number.isInteger(m.s) && m.s > match.ack){ match.ack = m.s; S().setInput(match.m, match.you.team, match.you.slot, m); } break;

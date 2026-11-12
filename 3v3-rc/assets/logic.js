@@ -84,5 +84,7 @@ function lagWindow(win, t, n, keepMs){
 // own player (lead's rule): never corrected while the finger moves unless the error is over 8 units; a resting finger settles small drift
 // (> 1.5, e.g. after a bump) gently; over 8 eases back fast (~100 ms) instead of jumping. Returns the easing rate a second (0 = leave it).
 const ownRate = (err, fingerMoving) => err > 8 ? 12 : err > 1.5 && !fingerMoving ? 3 : 0;
-root.L3 = { STEP_MS, lagWindow, ownRate, subLine, clockText, scoreText, deepJoin, restAfterFails, interp, stamp, shouldSend, histAt, toWorld, backoff, cleanCode, goals, hasPrize, keepPrize, prizeLive, whyLine, planB, ballAhead, isBot, sameMatch, CODE_ABC };
+// the server is full (err busy, 20+ people at once): ask again by itself after 3, 6, then 10 s; then give up with one word
+const BUSY_WAIT = [3000, 6000, 10000], busyWait = n => n < BUSY_WAIT.length ? BUSY_WAIT[n] : null;
+root.L3 = { busyWait, STEP_MS, lagWindow, ownRate, subLine, clockText, scoreText, deepJoin, restAfterFails, interp, stamp, shouldSend, histAt, toWorld, backoff, cleanCode, goals, hasPrize, keepPrize, prizeLive, whyLine, planB, ballAhead, isBot, sameMatch, CODE_ABC };
 })(typeof globalThis !== "undefined" ? globalThis : this);

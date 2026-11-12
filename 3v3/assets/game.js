@@ -21,7 +21,7 @@ const buzz = p => { try { if (navigator.vibrate) navigator.vibrate(p); } catch (
 const ERRS = { "no-room": "No game", "room-full": "Full", started: "Started", busy: "Busy", bad: "Try again" };   // one short line (§13)
 
 let screen = "home";
-function show(n){ screen = n; SCREENS.forEach(s => { $("#s-" + s).hidden = s !== n; }); if (n === "mode") modeState(); if (n === "match") sizePads(); pillCheck(); ticketState(); }
+function show(n){ screen = n; SCREENS.forEach(s => { $("#s-" + s).hidden = s !== n; }); $("#stadium").hidden = n === "match"; if (n === "home" && tickerAt) homeTicker(); if (n === "mode") modeState(); if (n === "match") sizePads(); pillCheck(); ticketState(); }
 function toast(msg, ms){ const t = $("#toast"); t.textContent = msg; t.hidden = false; clearTimeout(toast.h); toast.h = setTimeout(() => { t.hidden = true; }, ms || 2200); }
 
 const G = { cat: Store.get("s3v3:cat"), joined: !!Store.get("s3v3:joined"), want: null, phase: "idle", solo: false, local: false, everUp: false,
@@ -48,7 +48,7 @@ const sock = Net.Socket({
   msg: onMsg,
   down(wasUp, fails){
     if (finger.a){ finger.a = 0; finger.id = null; }
-    if (!G.solo && fails >= 3 && (G.phase === "asking" || G.phase === "room")){ leaveAll(); show("rest"); }   // §9.5: 3 failed connects
+    if (L3.restAfterFails(G.phase, G.solo, fails, screen)){ leaveAll(); show("rest"); }   // §9.5: 3 failed connects while asking for a game
   }
 });
 function send(o){ return sock.send(o); }
@@ -76,6 +76,8 @@ function onErr(m){
 
 /* ---------- home, join step, cat, mode ---------- */
 $("#goJoin").addEventListener("click", () => { show(G.joined ? "pick" : "join"); });
+let tickerAt = 0;   // the ticker's counts are asked again when home shows (at most every 30 s)
+function homeTicker(){ if (Date.now() - tickerAt < 30000) return; tickerAt = Date.now(); Net.health().then(h => { if (h && h.ok) ticker(h); }); }
 [["#tgJoin", CONFIG.telegram], ["#igJoin", CONFIG.instagram], ["#restTg", CONFIG.telegram], ["#restIg", CONFIG.instagram]].forEach(([s, u]) => { $(s).href = u; });
 // a page can't check a follow or a channel join: Play works once either link was tapped (owner 12 Nov ~20:20), remembered on this phone
 function joinedNow(){ G.joined = true; Store.set("s3v3:joined", 1); $("#tgErr").hidden = true; }
@@ -84,7 +86,7 @@ $("#goPick").addEventListener("click", () => { if (!G.joined){ $("#tgErr").hidde
 const cardsEl = $("#cards");
 Draw.CATS.forEach((c, i) => {
   const b = document.createElement("button"); b.className = "card"; b.setAttribute("aria-pressed", String(G.cat === i));
-  b.innerHTML = '<img alt="" src="' + c.src + '"><span>' + c.name + "</span>";
+  b.innerHTML = '<span class="num">' + [7, 10, 9, 1][i] + '</span><img alt="" src="' + c.src + '"><span>' + c.name + "</span>";   // rev 8 trading cards
   b.addEventListener("click", () => { G.cat = i; Store.set("s3v3:cat", i); [...cardsEl.children].forEach((x, j) => x.setAttribute("aria-pressed", String(j === i))); setTimeout(() => show("mode"), 250); });
   cardsEl.appendChild(b);
 });
@@ -182,7 +184,7 @@ function roomTick(){
 /* ---------- the match ---------- */
 const pitchCv = $("#pitch");
 const finger = { x: C.W / 2, y: C.H * 0.8, a: 0, id: null };
-let lastSent = null, seq = 0, V = null, shake = 0, padTop = 54, padBot = 12;
+let lastSent = null, seq = 0, V = null, shake = 0, freeze = 0, padTop = 54, padBot = 12;
 function onStart(m){
   clearTimeout(G.soloTimer);
   if (G.M && G.M.id === m.id){ G.M.you = m.you; G.M.lastSnapT = performance.now(); if (screen !== "match") show("match"); return; }   // re-sent after a reconnect: carry on
@@ -194,7 +196,7 @@ function onStart(m){
   G.M.sub = G.M.md ? "🤖 " + L3.goals(G.M.need) + " wins" : "1st goal wins";
   G.phase = "match"; G.want = null; G.rematch = false; finger.a = 0; finger.id = null; lastSent = null;
   Store.set(NS + "pend", { id: m.id, at: Date.now() });
-  show("match"); banner("3", G.M.sub); $("#hint").hidden = false; hudSet(true);
+  Fx.clear(); show("match"); banner("3", G.M.sub); $("#hint").hidden = false; hudSet(true);
 }
 function onSnap(m){
   const M = G.M; if (!M || !Array.isArray(m.p) || !Array.isArray(m.b)) return;
@@ -221,27 +223,29 @@ function onEv(m){
       if (Array.isArray(m.sc)) M.sc = m.sc; else M.sc[m.w] = (M.sc[m.w] || 0) + 1;
       const mine = m.w === me;
       const botGoal = M.md && !mine;
-      banner(botGoal ? "🤖 GOAL" : "GOAL!", "", botGoal ? 1400 : 0); lights(m.w, !botGoal);
-      if (botGoal){ Sfx.play("groan"); buzz(60); }
-      else { Sfx.play("roar"); Sfx.play("horn"); Sfx.play(mine ? "fanfare" : "groan"); Sfx.play("net"); Sfx.bed(1.6); setTimeout(() => Sfx.bed(0.8), 2500); buzz(mine ? [40, 30, 90] : 60); }
-      break; }
+      if (mine && M.newest) M.goalTl = M.newest.tl;   // for the personal best
+      banner(botGoal ? "🤖 GOAL!" : "GOAL!", "", botGoal ? 1400 : 0); lights(m.w, !botGoal, botGoal ? 1 - me : -1);
+      Sfx.play("whistle"); Sfx.play("horn"); Sfx.play("roar"); Sfx.play("net"); Sfx.bed(1.6); setTimeout(() => Sfx.bed(0.8), 2500);   // every goal
+      if (mine) Sfx.play("fanfare");
+      buzz(botGoal ? [40, 30, 40] : [60, 40, 90]); break; }
     case "draw": case "timeup": banner(m.k === "timeup" || M.md ? "TIME UP" : "DRAW"); Sfx.play("whistle"); Sfx.bedStop(); break;   // timeup = vs the bot, time ran out
-    case "hit": { const mine = m.team === me && m.slot === M.you.slot; if (mine || m.p > 0.5) Sfx.play("kick", m.p); if (mine) buzz(Math.round(8 + 22 * (m.p || 0))); break; }
+    case "hit": { const mine = m.team === me && m.slot === M.you.slot; if (mine || m.p > 0.5) Sfx.play("kick", m.p); if (mine) buzz(Math.round(8 + 22 * (m.p || 0)));
+      if (m.p > 0.7 && !Draw.REDUCED) freeze = Math.max(freeze, 0.06); break; }   // hit-stop on a big hit
     case "wall": Sfx.play("wall"); break;
-    case "post": Sfx.play("clang"); break;
+    case "post": {   // a fast ball off the post = a near miss: "ooh", 😱, the crowd jumps, a beat of hit-stop (the server keeps playing)
+      Sfx.play("clang"); const b = M.newest && M.newest.b;
+      if (b && M.newest.st === C.ST_PLAY && Math.hypot(b[2], b[3]) > 22){ Sfx.play("ooh"); banner("😱", "", 700); Draw.st.hype = 1.2; Draw.st.hypeTeam = -1; if (!Draw.REDUCED) freeze = Math.max(freeze, 0.1); }
+      break; }
   }
 }
-// a goal: the net ripples; a celebration (not for the bot's goal) adds the flash, camera flashes, beams, confetti and a shake.
-// The slow motion is the server's own: the sim runs the celebration at quarter speed. Reduced motion = only the ripple stops too.
-function lights(w, party){
+// every goal (rev 8, owner ~21:48): the net ripples, the crowd jumps with a phone-flash storm, one white flash then two sweeping beams;
+// a goal by people adds hit-stop, a shake and confetti. The slow motion is the server's own (the sim's quarter-speed celebration).
+// Reduced motion: none of the movement (a still crowd, no flash, beams, shake, hit-stop or confetti).
+function lights(w, people, hypeTeam){
   Draw.st.rip = { j: w === 0 ? 0 : 1, a: 1, t: 0 };   // Matcha scores in the top net (y 0), Yuzu in the bottom one
-  if (!party || Draw.REDUCED) return;
-  Fx.bigFlash(0.8); Fx.party(2.4); Fx.confetti([COL[w].f, "#fffbe6", "#ffd23f"]); shake = 8;
-}
-// the crowd sits in the dark bands above and below the pitch: camera flashes pop there
-function standsFor(v){
-  const top = v.oy - (C.H / 2 + 5) * v.S, bot = v.oy + (C.H / 2 + 5) * v.S, w = v.f.cw;
-  Fx.setStands([{ x: 0, y: padTop, w, h: top - padTop }, { x: 0, y: bot, w, h: v.f.ch - padBot - bot }]);
+  Draw.st.hype = people ? 3.2 : 2.4; Draw.st.hypeTeam = hypeTeam; Draw.st.storm = 1.2;
+  if (Draw.REDUCED) return;
+  Fx.goalFlash(); if (people){ freeze = 0.12; shake = 8; Fx.confetti([COL[w].f, "#fffbe6", "#ffd23f"]); }
 }
 let bannerT = 0;
 function banner(txt, sub, ms){
@@ -289,9 +293,10 @@ function ballTarget(M, N, I, now){
 }
 function drawMatch(dt, now){
   const M = G.M;
-  V = Draw.view(pitchCv, !!(M && M.you.team === 1), padTop, padBot);
-  standsFor(V);
-  if (!M || !M.newest){ Draw.render(pitchCv, { gw: C.GW0, ball: null, players: [] }, V, T, null, dt, 0); return; }
+  V = Draw.view(pitchCv, !!(M && M.you.team === 1), padTop, padBot, true);   // the view leaves room for the stands
+  Draw.st.hype = Math.max(0, Draw.st.hype - dt); Draw.st.storm = Math.max(0, Draw.st.storm - dt);
+  if (!M || !M.newest){ Draw.render(pitchCv, { gw: C.GW0, ball: null, players: [], crowd: true }, V, T, null, dt, 0); return; }
+  if (freeze > 0 && !Draw.REDUCED){ freeze -= dt; return; }   // hit-stop: the picture holds for a beat on a big hit or a goal
   const N = M.newest, n = N.p.length, size = n / 2, me = myIdx(M, N), I = L3.interp(M.snaps, now - CONFIG.delayMs), own = M.own;
   if (N.st === C.ST_PLAY){   // own player: predicted with the server's own follow rule, so it moves under the finger at once
     if (!own.on){ const p = N.p[me]; Object.assign(own, { x: p[0], y: p[1], vx: 0, vy: 0, ex: 0, ey: 0, hist: [], on: true }); }
@@ -314,11 +319,11 @@ function drawMatch(dt, now){
   }
   if (Draw.st.rip){ Draw.st.rip.t += dt; Draw.st.rip.a = Math.max(0, Draw.st.rip.a - dt * 0.8); if (!Draw.st.rip.a) Draw.st.rip = null; }
   const fast = mode && Math.hypot(N.b[2], N.b[3]) > 8;
-  Draw.render(pitchCv, { gw: I.gw, ball: { x: B.dx, y: B.dy, fast }, trail: Draw.st.lite ? null : M.trail, players }, V, T, null, dt, shake); shake *= 0.9;
+  Draw.render(pitchCv, { gw: I.gw, ball: { x: B.dx, y: B.dy, fast }, trail: Draw.st.lite ? null : M.trail, players, crowd: true }, V, T, null, dt, shake); shake *= 0.9;
   const clk = N.st === C.ST_COUNT ? String(Math.ceil((N.tl || 60000) / 1000)) : String(Math.max(0, Math.ceil(N.tl / 1000))); const ce = $("#clock"); if (ce.textContent !== clk) ce.textContent = clk;
   if (N.st === C.ST_COUNT){   // 3 · 2 · 1 from the server's countdown
     const cd = typeof N.cd === "number" ? N.cd - (now - N.arr) : (M.at + C.COUNT_S * 1000 - Net.now()), c = Math.ceil(cd / 1000);
-    if (c !== M.cdShown && c > 0){ M.cdShown = c; banner(String(c), M.sub); Sfx.play("tick"); }
+    if (c !== M.cdShown && c > 0){ M.cdShown = c; banner(String(c), M.sub); Sfx.play("beep", 4 - Math.min(3, c)); }   // rising beeps
   }
   hudSet(false);
   if (sock.up() && now - M.lastSnapT > 12000) lostMatch();   // the server forgot the match (it never goes silent this long)
@@ -336,18 +341,24 @@ function onEnd(m){
   if (G.last && G.last.id === m.id && screen === "result") return;
   const M = G.M, team = M ? M.you.team : (typeof m.team === "number" ? m.team : 0);
   const res = { id: m.id, r: m.r, w: m.w, code: m.code || null, prize: m.prize || null, md: m.md !== undefined ? (m.md ? 1 : 0) : (M ? M.md : 0),
-    sc: Array.isArray(m.sc) ? m.sc : M ? M.sc : null, team, at: Date.now(), used: m.used || null, solo: G.solo, exp: m.exp || null, why: m.why || null };
+    sc: Array.isArray(m.sc) ? m.sc : M ? M.sc : null, team, at: Date.now(), used: m.used || null, solo: G.solo, exp: m.exp || null, why: m.why || null,
+    secs: M && typeof M.goalTl === "number" ? Math.round((C.MATCH_S * 1000 - M.goalTl) / 100) / 10 : null };   // seconds to the winning goal
   G.last = res; Store.set(NS + "last", res); Store.del(NS + "pend");
   const kept = L3.keepPrize(G.prize, res); if (kept !== G.prize){ G.prize = kept; Store.set(NS + "prize", kept); }   // a later no-prize result never replaces it
   G.M = null; clearTimeout(G.soloTimer);
   if (G.solo){ G.phase = "idle"; setTimeout(() => { if (G.phase === "idle") sock.stop(); }, 1200); } else G.phase = G.room ? "room" : "idle";
-  Sfx.bedStop(); showResult(res);
+  Sfx.bedStop(); Fx.clear(); showResult(res);
   if (res.r === "win"){ Sfx.play("fanfare"); Sfx.play("coin"); Fx.fireworks(6); Fx.confetti(["#6fbf4a", "#ffd23f", "#fffbe6"], 0); buzz([60, 40, 120]); }   // fireworks: not with reduced motion / lite
   else if (res.r === "lose") Sfx.play("sad"); else Sfx.play("whistle");
 }
 function showResult(res){
-  const ch = res.md === 1, win = res.r === "win", me = res.team, sc = res.sc || [0, 0];
+  const ch = res.md === 1, win = res.r === "win", me = res.team, sc = res.sc || [0, 0]; if (!win) Fx.clear();
   $("#rTitle").textContent = win ? "WIN!" : res.r === "draw" ? "DRAW" : "LOSE";
+  $("#trophy").hidden = !win; $("#sadcat").hidden = win;   // rev 8: the trophy with rays, or the sad cat
+  // personal best on this phone: the fastest winning goal ("⚡ 12.4s · 🏅 BEST")
+  const pb = $("#pb"); pb.hidden = !(win && res.secs > 0);
+  if (!pb.hidden){ const best = Store.get(NS + "best"), isBest = !(best > 0) || res.secs < best; if (isBest && !res.shown) Store.set(NS + "best", res.secs);
+    pb.textContent = "⚡ " + res.secs.toFixed(1) + "s" + (isBest || res.best ? " · 🏅 BEST" : ""); if (isBest) res.best = 1; res.shown = 1; }
   $("#rEyebrow").textContent = ch ? "🤖 " + (sc[1 - me] || 0) + " – " + (sc[me] || 0) + " YOU" : (sc[me] || 0) + " – " + (sc[1 - me] || 0);
   prizeCard(res);
   const why = L3.whyLine(res); $("#noPrize").textContent = why; $("#noPrize").hidden = !why;
@@ -419,20 +430,37 @@ function pillCheck(){
 }
 const ribbon = { staging: "TEST SERVER", local: "LOCAL SERVER", fake: "OFFLINE DEMO · nothing is saved" }[Net.mode];
 if (ribbon){ $("#ribbon").textContent = ribbon; $("#ribbon").hidden = false; document.body.classList.add("ribbon-on"); }
-if (Q.has("lite") || (navigator.hardwareConcurrency || 8) <= 2) Draw.st.lite = true;
+if (Q.has("lite") || (navigator.hardwareConcurrency || 8) <= 2){ Draw.st.lite = true; document.body.classList.add("lite"); }
 let perfN = 0, perfSum = 0;
 function perfWatch(dt){   // slow phone: under ~36 fps for 2 s of a match → lite drawing (no trail, no floodlight pools)
   if (Draw.st.lite || screen !== "match" || !(dt > 0)) return; perfN++; perfSum += dt;
-  if (perfN >= 120){ if (perfSum / perfN > 0.028){ Draw.st.lite = true; if (DEBUG) toast("Lite mode"); } perfN = 0; perfSum = 0; }
+  if (perfN >= 120){ if (perfSum / perfN > 0.028){ Draw.st.lite = true; document.body.classList.add("lite"); if (DEBUG) toast("Lite mode"); } perfN = 0; perfSum = 0; }
 }
 function dbg(){
   if (!DEBUG) return; const d = $("#dbg"); d.hidden = false;
   d.textContent = "RTT " + Math.round(Net.clock.rtt) + " ms · off " + Math.round(Net.clock.offset) + " ms\n" + Net.mode + (sock.isLocal() ? " · LOCAL" : "") + (Draw.st.lite ? " · lite" : "") + " · seq " + seq;
 }
 
-/* ---------- home background: the bots-only demo, as in the mock-up ---------- */
+/* ---------- the stadium behind the screens: a camera flash pops now and then (≤ 2 on screen at once; never with reduced motion / lite) ---------- */
+setInterval(() => {
+  const st = $("#stadium"); if (Draw.REDUCED || Draw.st.lite || st.hidden || document.hidden) return;
+  const f = document.createElement("i"); f.className = "flash"; f.style.left = (4 + Math.random() * 92) + "%"; f.style.top = (3 + Math.random() * 24) + "%";
+  st.appendChild(f); setTimeout(() => f.remove(), 550);
+}, 380);
+// the LED ticker under PLAY: real counts from the server only (a figure it doesn't send is left out; none at all = no ticker)
+function ticker(h){
+  const parts = [];
+  if (h && Number.isInteger(h.goals)) parts.push("⚽ " + h.goals + " GOALS TODAY");
+  if (h && Number.isInteger(h.beaten)) parts.push("🤖 BOT BEATEN " + h.beaten + "×");
+  $("#ticker").hidden = !parts.length; if (!parts.length) return;
+  parts.push("📍 OCBC ARENA 13–15 NOV"); const one = parts.join(" \u00a0·\u00a0 ") + " \u00a0·\u00a0 ";
+  $("#tickerTxt").textContent = one + one + one + one;   // the scroll moves half its width, so the text repeats
+}
+
+/* ---------- home background: the bots-only demo on the tilted pitch (hidden with reduced motion), as in the mock-up ---------- */
 const bgCv = $("#bgpitch"); let demo = null;
 function drawDemo(dt){
+  if (Draw.REDUCED) return;
   if (!demo || demo.st === C.ST_END) demo = Sim3.createMatch({ seed: Math.floor(Math.random() * 1e9), humans: [], cats: [[0, 1, 2], [3, 0, 1]], size: 2 });
   Sim3.step(demo, dt);
   const v = Draw.view(bgCv, false, 10, 34);
@@ -447,7 +475,6 @@ function frame(now){
   if (screen === "home") drawDemo(dt);
   else if (screen === "match") drawMatch(dt, now);
   else if (screen === "lobby") roomTick();
-  if (screen !== "match") Fx.setStands(null);
   if ((tick = (tick + 1) % 30) === 0) ticketState();   // expiry, about twice a second
   Fx.frame(dt); perfWatch(dt); sendInput(false); pillCheck(); dbg();
 }
@@ -461,6 +488,7 @@ window.addEventListener("pageshow", e => { if (e.persisted){ sock.nudge(); reche
 /* ---------- start ---------- */
 function applyHealth(h){
   if (!h || !h.ok) return;
+  ticker(h);
   if (typeof h.need === "number" && h.need > 0) G.need = h.need;
   G.soloLocal = h.solo === "local"; if (G.soloLocal) G.multiRest = true;   // §8: the server asks phones to play single player on the phone
   if (h.closed){ leaveAll(); show("rest"); } else if (screen === "mode") modeState();
@@ -473,7 +501,7 @@ function applyHealth(h){
   else show("home");
   if (!G.prize && hasPrize(last)){ G.prize = L3.keepPrize(null, last); Store.set(NS + "prize", G.prize); }   // a result saved before the ticket key
   recheck();   // shows "✓ Used" if staff already took the ticket
-  const h = await Net.health(); applyHealth(h);
+  const h = await Net.health(); tickerAt = Date.now(); applyHealth(h);
   // §9.2: a match this phone started but never got the end of (it slept, or the page was closed): ask the server for it
   if (pend && Date.now() - pend.at < 10 * 60000 && screen !== "rest"){
     const r = await Net.post("/result", { dev: Net.dev });

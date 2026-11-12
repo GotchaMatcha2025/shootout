@@ -15,7 +15,7 @@ const Fake = (() => {
   const code = n => { let c = ""; for (let i = 0; i < n; i++) c += ABC[Math.floor(Math.random() * ABC.length)]; return c; };
   let nIn = 0, lastIn = null;
   let sock = null, dev = null, refuse = 0, closed = false, room = null, match = null, lastEnd = null, acked = null, qT = 0;
-  const results = [];
+  const results = [], stats = { goals: 0, beaten: 0 };   // this fake's own counts (the LED ticker shows only real counts)
 
   // deliver in order, LAG ms later (+ a little jitter), like one 4G socket
   function later(fn){ const t = Math.max(qT, Date.now() + LAG + Math.random() * (LAG ? 15 : 0)); qT = t; setTimeout(fn, t - Date.now()); }
@@ -121,6 +121,7 @@ const Fake = (() => {
       const res = await Net.post("/solo", { dev, goals: sc[me], ms: Date.now() - M.t0 });
       c = res && res.ok && res.code ? res.code : null; prize = null; why = "offline"; if (res && res.r) r = res.r;   // played on the phone: never a prize (§12.3)
     }
+    stats.goals += (sc[0] || 0) + (sc[1] || 0); if (M.solo && r === "win") stats.beaten++;
     const at = now(), msg = { t: "end", id: M.id, r, w, code: c, prize, md: M.md, sc, exp: at + 30 * 60000, why };
     if (c) results.push({ id: M.id, code: c, r, at, prize, used: null, exp: msg.exp, why, md: M.md });
     lastEnd = msg; out(msg);
@@ -163,7 +164,7 @@ const Fake = (() => {
 
   async function post(path, body){
     await new Promise(r => setTimeout(r, LAG * 2));
-    if (path === "/") return { ok: true, v: "fake", closed, solo: null, need: need(), status: 200 };
+    if (path === "/") return { ok: true, v: "fake", closed, solo: null, need: need(), goals: stats.goals, beaten: stats.beaten, status: 200 };
     if (path === "/result"){
       const r = body && body.code ? results.find(x => x.code === body.code) : results[results.length - 1];
       return r ? { ok: true, id: r.id, r: r.r, at: r.at, prize: r.prize, used: r.used, code: r.code, exp: r.exp, why: r.why, md: r.md, status: 200 } : { ok: false, e: "not-found", status: 404 };

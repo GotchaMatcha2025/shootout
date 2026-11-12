@@ -9,10 +9,13 @@ const Draw = (() => {
     { id: "dep", name: "Matcha Deprived", src: "../assets/img/matcha-deprived-cream.webp", cx: 300, cy: 240, r: 150 }
   ];
   CATS.forEach(c => { c.img = new Image(); c.img.src = c.src; });
+  const LOGO = new Image(); LOGO.src = "../assets/img/logo-lockup-white.webp";   // rev 8: the logo in the centre circle
   const COL = { 0: { f: "#6fbf4a", d: "#3d7a26", name: "MATCHA", t: "Matcha" }, 1: { f: "#ffd23f", d: "#b88a00", name: "YUZU", t: "Yuzu" } };
   const REDUCED = !!(window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches);
   const K = () => Sim3.C;
-  const st = { lite: false, rip: null };   // rip = {j: 0 top net | 1 bottom net, a: 0–1}: the net shakes after a goal
+  // rip = {j: 0 top net | 1 bottom net, a: 0–1}: the net shakes after a goal; hype = seconds the crowd jumps (hypeTeam -1 = everyone);
+  // storm = seconds of the phone-flash storm after a goal
+  const st = { lite: false, rip: null, hype: 0, hypeTeam: -1, storm: 0 };
 
   const faceCache = {};
   function faceCanvas(ci, team, px){
@@ -32,6 +35,10 @@ const Draw = (() => {
     g.beginPath(); g.moveTo(0, H / 2); g.lineTo(W, H / 2); g.stroke();
     g.beginPath(); g.arc(W / 2, H / 2, 8, 0, 7); g.stroke();
     g.fillStyle = "#eef3e6cc"; g.beginPath(); g.arc(W / 2, H / 2, 0.5, 0, 7); g.fill();
+    if (LOGO.complete && LOGO.naturalWidth){ g.save(); g.globalAlpha = 0.16; const lw = 14, lh = lw * LOGO.naturalHeight / LOGO.naturalWidth; g.drawImage(LOGO, W / 2 - lw / 2, H / 2 - lh / 2, lw, lh); g.restore(); }
+    [[0, 0], [W, 0], [0, H], [W, H]].forEach(([x, y]) => {   // corner flags
+      g.strokeStyle = "#fffbe6"; g.lineWidth = 0.3; g.beginPath(); g.moveTo(x, y); g.lineTo(x, y + (y ? -3 : 3)); g.stroke();
+      g.fillStyle = x ? "#ffd23f" : "#6fbf4a"; g.beginPath(); g.moveTo(x, y + (y ? -3 : 3)); g.lineTo(x + (x ? -2.2 : 2.2), y + (y ? -2.2 : 2.2)); g.lineTo(x, y + (y ? -1.4 : 1.4)); g.fill(); });
     [[0, 0], [H, Math.PI]].forEach(([y, a]) => { g.fillStyle = "#ffffff14"; g.beginPath(); g.arc(W / 2, y, CREASE, a, a + Math.PI); g.fill();   // goal circles: nobody stands inside
       g.setLineDash([1.2, 1]); g.beginPath(); g.arc(W / 2, y, CREASE, a, a + Math.PI); g.stroke(); g.setLineDash([]); });
     const half = gw / 2;   // goals (nets) grow in the last 15 s
@@ -74,6 +81,47 @@ const Draw = (() => {
     g.fillStyle = "#1b2a20"; g.beginPath(); g.arc(b.x + 0.2, b.y, 0.45, 0, 7); g.fill(); g.beginPath(); g.arc(b.x - 0.7, b.y - 0.6, 0.25, 0, 7); g.fill(); g.beginPath(); g.arc(b.x - 0.5, b.y + 0.75, 0.25, 0, 7); g.fill();
   }
 
+  /* the crowd: fans in the stands round the pitch (mock-up rev 7–8, owner ~21:08): coloured circles that bob, jump with arms up on goals
+     and near misses, banners and flags, phone-camera flashes (a storm after a goal). Reduced motion = a still crowd; lite = half the fans. */
+  const FAN_COLS = ["#6fbf4a", "#6fbf4a", "#9be27a", "#ffd23f", "#ffd23f", "#ffe06a", "#fffbe6", "#ff6b5b", "#5aa9ff", "#f39c4a", "#c58cff"];
+  const FANS = [], BANNERS = [];
+  function buildCrowd(){
+    const { W, H } = K(); let k = 0;
+    const add = (x, y, team) => { k++; const c = Math.random() < 0.55 ? (team ? ["#ffd23f", "#ffe06a"][k % 2] : ["#6fbf4a", "#9be27a"][k % 2]) : FAN_COLS[(k * 7) % FAN_COLS.length];
+      FANS.push({ x, y, c, ph: Math.random() * 6.28, f: 3 + Math.random() * 3, r: 0.85 + Math.random() * 0.35, team }); };
+    for (let col = 0; col < 3; col++) for (let y = -7; y <= H + 7; y += 2.5){ add(-2.6 - col * 2.4, y + (col % 2) * 1.2, 0); add(W + 2.6 + col * 2.4, y + (col % 2) * 1.2, 1); }
+    for (let row = 0; row < 2; row++) for (let x = -6; x <= W + 6; x += 2.5){ add(x + (row % 2) * 1.2, -7.2 - row * 2.4, 1); add(x + (row % 2) * 1.2, H + 7.2 + row * 2.4, 0); }
+    BANNERS.push({ x: -5, y: 20, w: 7, c: "#6fbf4a", tc: "#0b1a10", txt: "MATCHA", rot: -Math.PI / 2, ph: 0 }, { x: -5, y: 72, w: 7, c: "#fffbe6", tc: "#0b1a10", txt: "GOTCHA", rot: -Math.PI / 2, ph: 1.3 },
+      { x: W + 5, y: 28, w: 7, c: "#ffd23f", tc: "#0b1a10", txt: "YUZU", rot: Math.PI / 2, ph: 2.1 }, { x: W + 5, y: 80, w: 7, c: "#fffbe6", tc: "#0b1a10", txt: "⚽ GOAL", rot: Math.PI / 2, ph: 0.7 },
+      { x: 12, y: -8.5, w: 8, c: "#ffd23f", tc: "#0b1a10", txt: "GO YUZU", rot: 0, ph: 0.4 }, { x: W - 12, y: H + 8.5, w: 8.5, c: "#6fbf4a", tc: "#0b1a10", txt: "GO MATCHA", rot: 0, ph: 2.6 },
+      { x: -3, y: 46, flag: 1, c: "#6fbf4a", rot: 0, ph: 0.9 }, { x: W + 3, y: 52, flag: 1, c: "#ffd23f", rot: 0, ph: 1.9 }, { x: W - 6, y: -7.5, flag: 1, c: "#ff6b5b", rot: 0, ph: 3.1 }, { x: 6, y: H + 7.5, flag: 1, c: "#5aa9ff", rot: 0, ph: 0.2 });
+  }
+  function crowd(g, t){
+    const { W, H } = K(), lite = st.lite, hype = st.hype > 0; if (!FANS.length) buildCrowd();
+    g.fillStyle = "#0d1a12"; g.fillRect(-12, -13, W + 24, H + 26);   // the stands: dark concrete steps behind the fans
+    g.fillStyle = "#13261a"; for (let i = 0; i < 4; i++){ g.fillRect(-11 + i * 2.4, -12, 1.2, H + 24); g.fillRect(W + 9.8 - i * 2.4, -12, 1.2, H + 24); }
+    const amp = REDUCED ? 0 : 0.35, big = REDUCED ? 0 : 1.5;
+    for (let i = 0; i < FANS.length; i += lite ? 2 : 1){
+      const q = FANS[i], excited = hype && (st.hypeTeam < 0 || st.hypeTeam === q.team), j = Math.abs(Math.sin(t * q.f + q.ph)) * (excited ? big : amp);
+      g.fillStyle = "#0006"; g.beginPath(); g.ellipse(q.x + 0.25, q.y + 0.35, q.r * 0.9, q.r * 0.55, 0, 0, 7); g.fill();
+      g.fillStyle = q.c; g.beginPath(); g.arc(q.x, q.y - j, q.r, 0, 7); g.fill();
+      g.fillStyle = "#ffffff40"; g.beginPath(); g.arc(q.x - q.r * 0.3, q.y - j - q.r * 0.3, q.r * 0.35, 0, 7); g.fill();
+      if (excited && !REDUCED && i % 9 === 0){ g.strokeStyle = q.c; g.lineWidth = 0.25; g.beginPath(); g.moveTo(q.x - 0.6, q.y - j - 0.4); g.lineTo(q.x - 1.2, q.y - j - 1.6); g.moveTo(q.x + 0.6, q.y - j - 0.4); g.lineTo(q.x + 1.2, q.y - j - 1.6); g.stroke(); }   // arms up
+    }
+    BANNERS.forEach(bn => {   // banners and flags held up, waving (faster when the crowd jumps)
+      const w = REDUCED ? 0 : Math.sin(t * (hype ? 7 : 2.2) + bn.ph) * (hype ? 0.35 : 0.15);
+      g.save(); g.translate(bn.x, bn.y - (hype && !REDUCED ? Math.abs(Math.sin(t * 6 + bn.ph)) * 1.2 : 0)); g.rotate(bn.rot + w);
+      if (bn.flag){ g.strokeStyle = "#ddd"; g.lineWidth = 0.25; g.beginPath(); g.moveTo(0, 1.6); g.lineTo(0, -2.6); g.stroke(); g.fillStyle = bn.c; g.beginPath(); g.moveTo(0, -2.6); g.lineTo(2.6 + w * 2, -2.0); g.lineTo(0, -1.2); g.fill(); }
+      else { g.fillStyle = bn.c; g.fillRect(-bn.w / 2, -1.1, bn.w, 2.2); g.strokeStyle = "#0b1a10"; g.lineWidth = 0.15; g.strokeRect(-bn.w / 2, -1.1, bn.w, 2.2);
+        g.fillStyle = bn.tc; g.font = "900 1.5px Nunito, sans-serif"; g.textAlign = "center"; g.textBaseline = "middle"; g.fillText(bn.txt, 0, 0.1); }
+      g.restore();
+    });
+    const n = REDUCED ? 0 : st.storm > 0 ? 6 : Math.random() < 0.12 ? 1 : 0;   // phone camera flashes: now and then; a storm after a goal
+    for (let k = 0; k < n; k++){ const q = FANS[(Math.random() * FANS.length) | 0];
+      if (lite){ g.fillStyle = "#fffbe6"; g.beginPath(); g.arc(q.x, q.y - 1, 0.9, 0, 7); g.fill(); continue; }
+      const rg = g.createRadialGradient(q.x, q.y - 1, 0, q.x, q.y - 1, 2.2); rg.addColorStop(0, "#ffffff"); rg.addColorStop(0.35, "#fffbe6aa"); rg.addColorStop(1, "#fffbe600");
+      g.fillStyle = rg; g.beginPath(); g.arc(q.x, q.y - 1, 2.2, 0, 7); g.fill(); }
+  }
   function Confetti(){ this.p = []; }
   Confetti.prototype.burst = function(w, h, cols){ if (REDUCED) return; const n = st.lite ? 50 : 110;
     for (let i = 0; i < n; i++) this.p.push({ x: w / 2 + (Math.random() - 0.5) * w * 0.3, y: h * 0.42, vx: (Math.random() - 0.5) * 620, vy: -Math.random() * 620 - 120, r: Math.random() * 6 + 3, c: cols[i % cols.length], a: Math.random() * 6, l: 1 }); };
@@ -87,8 +135,9 @@ const Draw = (() => {
     return { w, h, d, cw: r.width, ch: r.height };
   }
   // world → screen for the phone; a Yuzu phone turns the world 180° so its team attacks up. toWorld undoes that turn for the finger.
-  function view(cv, flip, padTop, padBot){
-    const { W, H } = K(), f = fit(cv), S = Math.min(f.cw / (W + 5), (f.ch - padTop - padBot) / (H + 10));
+  // stands = the match view leaves room for the crowd round the pitch (rev 8)
+  function view(cv, flip, padTop, padBot, stands){
+    const { W, H } = K(), f = fit(cv), S = Math.min(f.cw / (W + (stands ? 16 : 5)), (f.ch - padTop - padBot) / (H + (stands ? 14 : 10)));
     const ox = f.cw / 2, oy = padTop + (f.ch - padTop - padBot) / 2;
     const v = { f, S, ox, oy, flip }; v.toWorld = (sx, sy) => L3.toWorld(v, sx, sy, W, H); return v;
   }
@@ -98,7 +147,7 @@ const Draw = (() => {
     g.setTransform(1, 0, 0, 1, 0, 0); g.fillStyle = "#07110b"; g.fillRect(0, 0, f.w, f.h);
     const sx = shake && !REDUCED ? (Math.random() - 0.5) * shake : 0;
     g.setTransform(f.d * v.S, 0, 0, f.d * v.S, f.d * (v.ox + sx), f.d * v.oy); if (v.flip) g.rotate(Math.PI); g.translate(-W / 2, -H / 2);
-    pitch(g, vm.gw); if (vm.ball) ball(g, vm.ball, vm.trail); players(g, vm.players, v.S, v.flip ? Math.PI : 0, t, f.d);
+    if (vm.crowd) crowd(g, t); pitch(g, vm.gw); if (vm.ball) ball(g, vm.ball, vm.trail); players(g, vm.players, v.S, v.flip ? Math.PI : 0, t, f.d);
     g.setTransform(f.d, 0, 0, f.d, 0, 0); if (conf) conf.draw(g, dt);
   }
   return { CATS, COL, REDUCED, st, faceCanvas, Confetti, view, render };

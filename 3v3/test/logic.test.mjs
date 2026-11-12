@@ -118,6 +118,14 @@ test('result recovery matches the match id, never the time', () => {
   assert.equal(L.sameMatch({ ok: false }, 'm1'), false); assert.equal(L.sameMatch({ ok: true, code: 'X', id: 'm1' }, null), false);
 });
 
+test('3 failed connects = resting only while asking for a game; never from a room or a result (the prize code stays)', () => {
+  assert.equal(L.restAfterFails('asking', false, 3, 'multi'), true);
+  assert.equal(L.restAfterFails('asking', false, 2, 'multi'), false);
+  assert.equal(L.restAfterFails('room', false, 5, 'lobby'), false, 'a room keeps reconnecting');
+  assert.equal(L.restAfterFails('room', false, 5, 'result'), false, 'the result screen is never left');
+  assert.equal(L.restAfterFails('asking', true, 5, 'match'), false, 'single player has plan B');
+});
+
 test('sim.js copy is byte-identical to the shared one (set SIM_SRC)', { skip: !process.env.SIM_SRC }, () => {
   const h = f => crypto.createHash('sha256').update(fs.readFileSync(f)).digest('hex');
   assert.equal(h(here + 'sim.js'), h(process.env.SIM_SRC));

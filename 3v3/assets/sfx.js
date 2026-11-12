@@ -93,6 +93,7 @@ const Sfx = {
       blast(t, 0.16); blast(t + 0.24, 0.46);
     },
     kick(t, p){ p = p >= 0 ? Math.min(1, p) : 0.7; this.tone(150, t, 0.22, { f2: 42, gain: 0.35 + 0.6 * p }); this.noise(t, 0.05, { type: "highpass", f: 1800, gain: 0.1 + 0.2 * p }); },   // thump scaled by hit strength
+    beep(t, n){ this.tone([660, 660, 880, 1100][n] || 660, t, 0.12, { type: "square", gain: 0.07, lp: 4000 }); },   // rev 8: the countdown rises 3 · 2 · 1
     wall(t){ this.tone(320, t, 0.06, { type: "square", gain: 0.05, lp: 2000 }); },
     whoosh(t, dur){ dur = dur || 0.6; this.noise(t, dur, { type: "bandpass", f: 450, f2: 2600, q: 1.3, a: dur * 0.65, gain: 0.2 }); },
     net(t){ this.noise(t, 0.5, { type: "bandpass", f: 3400, f2: 1800, q: 0.8, gain: 0.26 }); this.noise(t + 0.02, 0.7, { type: "lowpass", f: 900, gain: 0.14, a: 0.02 }); },

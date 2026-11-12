@@ -62,5 +62,8 @@ const ballAhead = (st, ahead) => st === 1 ? ahead : st === 2 || st === 3 ? ahead
 const isBot = (bt, i, startBot) => typeof bt === "number" ? !!((bt >> i) & 1) : startBot !== 0;
 // a recovered result (after a sleep or reload) belongs to this match only if the ids match, never by time
 const sameMatch = (r, id) => !!(r && r.ok && r.code && id && r.id === id);
-root.L3 = { interp, stamp, shouldSend, histAt, toWorld, backoff, cleanCode, goals, hasPrize, keepPrize, prizeLive, whyLine, planB, ballAhead, isBot, sameMatch, CODE_ABC };
+// "The game is resting" after 3 failed connects (CTO §9.5) only while asking for a game (create / join); a room or a result on screen
+// keeps reconnecting (the server holds the seat 60 s) and never loses the result; single player has plan B instead
+const restAfterFails = (phase, solo, fails, screen) => !solo && fails >= 3 && phase === "asking" && screen !== "result";
+root.L3 = { restAfterFails, interp, stamp, shouldSend, histAt, toWorld, backoff, cleanCode, goals, hasPrize, keepPrize, prizeLive, whyLine, planB, ballAhead, isBot, sameMatch, CODE_ABC };
 })(typeof globalThis !== "undefined" ? globalThis : this);

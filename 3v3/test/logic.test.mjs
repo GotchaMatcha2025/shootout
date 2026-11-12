@@ -68,6 +68,15 @@ test('game codes: upper case, letters and digits, 4 long; goal words', () => {
   assert.equal(L.goals(1), '1 goal'); assert.equal(L.goals(2), '2 goals');
 });
 
+test('prize card: only with a code and a prize name; never for a lost or timed-out game vs the bot', () => {
+  const p = { label: 'FREE MATCHA' };
+  assert.equal(L.hasPrize({ code: 'K7M2QX', prize: p, md: 0, r: 'lose' }), true, 'friends: the loser gets the consolation prize');
+  assert.equal(L.hasPrize({ code: 'K7M2QX', prize: p, md: 1, r: 'win' }), true);
+  assert.equal(L.hasPrize({ code: 'K7M2QX', prize: p, md: 1, r: 'lose' }), false, 'lost vs the bot: no card');
+  assert.equal(L.hasPrize({ code: 'K7M2QX', prize: null, md: 0, r: 'win' }), false, 'prizes still blank: no card');
+  assert.equal(L.hasPrize({ code: null, prize: p, md: 1, r: 'win' }), false, 'no code (plan B without the server): no card');
+});
+
 test('sim.js copy is byte-identical to the shared one (set SIM_SRC)', { skip: !process.env.SIM_SRC }, () => {
   const h = f => crypto.createHash('sha256').update(fs.readFileSync(f)).digest('hex');
   assert.equal(h(here + 'sim.js'), h(process.env.SIM_SRC));

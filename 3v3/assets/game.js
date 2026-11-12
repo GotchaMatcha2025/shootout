@@ -17,6 +17,7 @@ const Q = new URLSearchParams(location.search), DEBUG = Q.has("debug"), C = Sim3
 const SCREENS = ["home", "join", "pick", "mode", "multi", "lobby", "match", "result", "rest"];
 const SGT = (() => { try { return new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Singapore", hour: "2-digit", minute: "2-digit", hour12: false }); } catch (e) { return null; } })();
 const hhmm = ts => SGT ? SGT.format(new Date(ts)) : new Date(ts).toTimeString().slice(0, 5);   // always Singapore time
+const buzz = p => { try { if (navigator.vibrate) navigator.vibrate(p); } catch (e) { /* not on iPhone */ } };   // haptics where the phone has them
 const ERRS = { "no-room": "No game", "room-full": "Full", started: "Started", busy: "Busy", bad: "Try again" };   // one short line (§13)
 
 let screen = "home";
@@ -47,7 +48,7 @@ const sock = Net.Socket({
   }
 });
 function send(o){ return sock.send(o); }
-function leaveAll(){ clearTimeout(G.soloTimer); clearTimeout(G.roomTimer); G.phase = "idle"; G.want = null; G.room = null; G.M = null; G.rematch = false; sock.stop(); }
+function leaveAll(){ Sfx.bedStop(); clearTimeout(G.soloTimer); clearTimeout(G.roomTimer); G.phase = "idle"; G.want = null; G.room = null; G.M = null; G.rematch = false; sock.stop(); }
 
 function onMsg(m){
   if (typeof m.now === "number") Net.clock.hint(m.now);
@@ -70,25 +71,25 @@ function onErr(m){
 }
 
 /* ---------- home, join step, cat, mode ---------- */
-$("#goJoin").addEventListener("click", () => { Sfx.play("tap"); show(G.joined ? "pick" : "join"); });
+$("#goJoin").addEventListener("click", () => { show(G.joined ? "pick" : "join"); });
 [["#tgJoin", CONFIG.telegram], ["#igJoin", CONFIG.instagram], ["#restTg", CONFIG.telegram], ["#restIg", CONFIG.instagram]].forEach(([s, u]) => { $(s).href = u; });
 // a page can't check a follow or a channel join: Play works once either link was tapped (owner 12 Nov ~20:20), remembered on this phone
 function joinedNow(){ G.joined = true; Store.set("s3v3:joined", 1); $("#tgErr").hidden = true; }
 $("#tgJoin").addEventListener("click", joinedNow); $("#igJoin").addEventListener("click", joinedNow);
-$("#goPick").addEventListener("click", () => { Sfx.play("tap"); if (!G.joined){ $("#tgErr").hidden = false; return; } show("pick"); });
+$("#goPick").addEventListener("click", () => { if (!G.joined){ $("#tgErr").hidden = false; return; } show("pick"); });
 const cardsEl = $("#cards");
 Draw.CATS.forEach((c, i) => {
   const b = document.createElement("button"); b.className = "card"; b.setAttribute("aria-pressed", String(G.cat === i));
   b.innerHTML = '<img alt="" src="' + c.src + '"><span>' + c.name + "</span>";
-  b.addEventListener("click", () => { Sfx.play("tap"); G.cat = i; Store.set("s3v3:cat", i); [...cardsEl.children].forEach((x, j) => x.setAttribute("aria-pressed", String(j === i))); setTimeout(() => show("mode"), 250); });
+  b.addEventListener("click", () => { G.cat = i; Store.set("s3v3:cat", i); [...cardsEl.children].forEach((x, j) => x.setAttribute("aria-pressed", String(j === i))); setTimeout(() => show("mode"), 250); });
   cardsEl.appendChild(b);
 });
 function modeState(){
   $("#mSoloSub").textContent = L3.goals(G.need) + " wins";
   $("#mMulti").disabled = G.multiRest; $("#mMultiSub").textContent = G.multiRest ? "😴" : "1 v 1 · 2 v 2";   // §8: multiplayer resting
 }
-$("#mSolo").addEventListener("click", () => { Sfx.play("tap"); startSolo(); });
-$("#mMulti").addEventListener("click", () => { Sfx.play("tap"); $("#codeErr").hidden = true; show("multi"); });
+$("#mSolo").addEventListener("click", () => { startSolo(); });
+$("#mMulti").addEventListener("click", () => { $("#codeErr").hidden = true; show("multi"); });
 
 /* ---------- friends: join by code or start a game (§10, §12) ---------- */
 $("#codeIn").addEventListener("input", e => { const v = L3.cleanCode(e.target.value); if (v !== e.target.value) e.target.value = v; $("#codeErr").hidden = true; });
@@ -100,11 +101,11 @@ function ask(msg){
 $("#joinForm").addEventListener("submit", e => {
   e.preventDefault(); const code = L3.cleanCode($("#codeIn").value);
   if (code.length !== 4){ const er = $("#codeErr"); er.textContent = "Wrong code"; er.hidden = false; return; }
-  Sfx.play("tap"); $("#codeIn").blur(); ask({ t: "join", code, cat: G.cat });
+  $("#codeIn").blur(); ask({ t: "join", code, cat: G.cat });
 });
-$("#n1").addEventListener("click", () => { Sfx.play("tap"); ask({ t: "create", size: 1, cat: G.cat }); });
-$("#n2").addEventListener("click", () => { Sfx.play("tap"); ask({ t: "create", size: 2, cat: G.cat }); });
-$("#multiBack").addEventListener("click", () => { Sfx.play("tap"); leaveAll(); show("mode"); });
+$("#n1").addEventListener("click", () => { ask({ t: "create", size: 1, cat: G.cat }); });
+$("#n2").addEventListener("click", () => { ask({ t: "create", size: 2, cat: G.cat }); });
+$("#multiBack").addEventListener("click", () => { leaveAll(); show("mode"); });
 
 /* ---------- single player: vs the Matcha Bot (§7, §8, §11) ---------- */
 function soloHud(){ const A = $("#hudA"), B = $("#hudB"); A.textContent = "YOU"; B.textContent = "MATCHA BOT"; A.className = "tchip m"; B.className = "tchip yz"; }
@@ -156,9 +157,9 @@ function renderRoom(){
   $("#startGo").hidden = !(r.maker && !missing && !r.k);
   roomTick();
 }
-$("#slots").addEventListener("click", e => { const b = e.target.closest("button.slot"); if (!b || b.disabled) return; Sfx.play("tap"); send({ t: "seat", team: +b.dataset.t, slot: +b.dataset.s }); });
-$("#startGo").addEventListener("click", () => { Sfx.play("tap"); $("#startGo").hidden = true; send({ t: "start" }); });
-$("#leaveGo").addEventListener("click", () => { Sfx.play("tap"); send({ t: "leave" }); leaveAll(); show("multi"); });
+$("#slots").addEventListener("click", e => { const b = e.target.closest("button.slot"); if (!b || b.disabled) return; send({ t: "seat", team: +b.dataset.t, slot: +b.dataset.s }); });
+$("#startGo").addEventListener("click", () => { $("#startGo").hidden = true; send({ t: "start" }); });
+$("#leaveGo").addEventListener("click", () => { send({ t: "leave" }); leaveAll(); show("multi"); });
 let lastCount = -1;
 function roomTick(){
   const r = G.room; if (!r || screen !== "lobby") return;
@@ -169,7 +170,7 @@ function roomTick(){
 }
 
 /* ---------- the match ---------- */
-const pitchCv = $("#pitch"), conf = new Draw.Confetti();
+const pitchCv = $("#pitch");
 const finger = { x: C.W / 2, y: C.H * 0.8, a: 0, id: null };
 let lastSent = null, seq = 0, V = null, shake = 0, padTop = 54, padBot = 12;
 function onStart(m){
@@ -203,24 +204,34 @@ const myIdx = (M, s) => M.you.team * (s.p.length / 2) + M.you.slot;
 function onEv(m){
   const M = G.M; if (!M) return; const me = M.you.team;
   switch (m.k){
-    case "go": banner("GO!", "", 700); Sfx.play("whistle"); break;
+    case "go": banner("GO!", "", 700); Sfx.play("whistle"); Sfx.bed(0.8); break;   // the crowd bed runs while the ball is live
     case "kickoff": banner(""); M.cdShown = -1; break;                     // a challenge goes on after the bot's goal
     case "grow": banner("↔ BIGGER GOALS", "", 1400); break;
     case "goal": {
       if (Array.isArray(m.sc)) M.sc = m.sc; else M.sc[m.w] = (M.sc[m.w] || 0) + 1;
       const mine = m.w === me;
-      banner(M.md && !mine ? "🤖 GOAL" : "GOAL!", "", M.md && !mine ? 1400 : 0);
-      lights(m.w); Sfx.play("roar"); Sfx.play(mine ? "fanfare" : "groan"); break; }
-    case "draw": banner(M.md ? "TIME UP" : "DRAW"); Sfx.play("whistle"); break;
-    case "hit": if ((m.team === me && m.slot === M.you.slot) || m.p > 0.5) Sfx.play("kick", m.p); break;
+      const botGoal = M.md && !mine;
+      banner(botGoal ? "🤖 GOAL" : "GOAL!", "", botGoal ? 1400 : 0); lights(m.w, !botGoal);
+      if (botGoal){ Sfx.play("groan"); buzz(60); }
+      else { Sfx.play("roar"); Sfx.play("horn"); Sfx.play(mine ? "fanfare" : "groan"); Sfx.play("net"); Sfx.bed(1.6); setTimeout(() => Sfx.bed(0.8), 2500); buzz(mine ? [40, 30, 90] : 60); }
+      break; }
+    case "draw": case "timeup": banner(m.k === "timeup" || M.md ? "TIME UP" : "DRAW"); Sfx.play("whistle"); Sfx.bedStop(); break;   // timeup = vs the bot, time ran out
+    case "hit": { const mine = m.team === me && m.slot === M.you.slot; if (mine || m.p > 0.5) Sfx.play("kick", m.p); if (mine) buzz(Math.round(8 + 22 * (m.p || 0))); break; }
     case "wall": Sfx.play("wall"); break;
     case "post": Sfx.play("clang"); break;
   }
 }
-function lights(w){   // goal: confetti in the scorer's colours, a shake and one soft flash; reduced motion = none of them
-  if (Draw.REDUCED) return;
-  const r = pitchCv.getBoundingClientRect(); conf.burst(r.width, r.height, [COL[w].f, "#fffbe6", "#ffd23f"]); shake = 8;
-  const f = $("#flash"); f.classList.remove("on"); void f.offsetWidth; f.classList.add("on");
+// a goal: the net ripples; a celebration (not for the bot's goal) adds the flash, camera flashes, beams, confetti and a shake.
+// The slow motion is the server's own: the sim runs the celebration at quarter speed. Reduced motion = only the ripple stops too.
+function lights(w, party){
+  Draw.st.rip = { j: w === 0 ? 0 : 1, a: 1, t: 0 };   // Matcha scores in the top net (y 0), Yuzu in the bottom one
+  if (!party || Draw.REDUCED) return;
+  Fx.bigFlash(0.8); Fx.party(2.4); Fx.confetti([COL[w].f, "#fffbe6", "#ffd23f"]); shake = 8;
+}
+// the crowd sits in the dark bands above and below the pitch: camera flashes pop there
+function standsFor(v){
+  const top = v.oy - (C.H / 2 + 5) * v.S, bot = v.oy + (C.H / 2 + 5) * v.S, w = v.f.cw;
+  Fx.setStands([{ x: 0, y: padTop, w, h: top - padTop }, { x: 0, y: bot, w, h: v.f.ch - padBot - bot }]);
 }
 let bannerT = 0;
 function banner(txt, sub, ms){
@@ -268,7 +279,8 @@ function ballTarget(M, N, I, now){
 function drawMatch(dt, now){
   const M = G.M;
   V = Draw.view(pitchCv, !!(M && M.you.team === 1), padTop, padBot);
-  if (!M || !M.newest){ Draw.render(pitchCv, { gw: C.GW0, ball: null, players: [] }, V, T, conf, dt, 0); return; }
+  standsFor(V);
+  if (!M || !M.newest){ Draw.render(pitchCv, { gw: C.GW0, ball: null, players: [] }, V, T, null, dt, 0); return; }
   const N = M.newest, n = N.p.length, size = n / 2, me = myIdx(M, N), I = L3.interp(M.snaps, now - CONFIG.delayMs), own = M.own;
   if (N.st === C.ST_PLAY){   // own player: predicted with the server's own follow rule, so it moves under the finger at once
     if (!own.on){ const p = N.p[me]; Object.assign(own, { x: p[0], y: p[1], vx: 0, vy: 0, ex: 0, ey: 0, hist: [], on: true }); }
@@ -288,7 +300,9 @@ function drawMatch(dt, now){
     const cat = (M.cats[team] || [])[slot], bot = (M.bots[team] || [])[slot];
     players.push({ x: p[0], y: p[1], team, me: mine, cat: cat >= 0 ? cat : (i % 4), label: bot === 0 ? "" : "BOT" });
   }
-  Draw.render(pitchCv, { gw: I.gw, ball: { x: B.dx, y: B.dy }, trail: Draw.st.lite ? null : M.trail, players }, V, T, conf, dt, shake); shake *= 0.9;
+  if (Draw.st.rip){ Draw.st.rip.t += dt; Draw.st.rip.a = Math.max(0, Draw.st.rip.a - dt * 0.8); if (!Draw.st.rip.a) Draw.st.rip = null; }
+  const fast = mode && Math.hypot(N.b[2], N.b[3]) > 8;
+  Draw.render(pitchCv, { gw: I.gw, ball: { x: B.dx, y: B.dy, fast }, trail: Draw.st.lite ? null : M.trail, players }, V, T, null, dt, shake); shake *= 0.9;
   const clk = N.st === C.ST_COUNT ? String(Math.ceil((N.tl || 60000) / 1000)) : String(Math.max(0, Math.ceil(N.tl / 1000))); const ce = $("#clock"); if (ce.textContent !== clk) ce.textContent = clk;
   if (N.st === C.ST_COUNT){   // 3 · 2 · 1 from the server's countdown
     const cd = typeof N.cd === "number" ? N.cd - (now - N.arr) : (M.at + C.COUNT_S * 1000 - Net.now()), c = Math.ceil(cd / 1000);
@@ -314,7 +328,9 @@ function onEnd(m){
   G.last = res; Store.set(NS + "last", res); Store.del(NS + "pend");
   G.M = null; clearTimeout(G.soloTimer);
   if (G.solo){ G.phase = "idle"; setTimeout(() => { if (G.phase === "idle") sock.stop(); }, 1200); } else G.phase = G.room ? "room" : "idle";
-  showResult(res); Sfx.play(res.r === "win" ? "fanfare" : res.r === "lose" ? "sad" : "whistle");
+  Sfx.bedStop(); showResult(res);
+  if (res.r === "win"){ Sfx.play("fanfare"); Sfx.play("coin"); Fx.fireworks(6); Fx.confetti(["#6fbf4a", "#ffd23f", "#fffbe6"], 0); buzz([60, 40, 120]); }   // fireworks: not with reduced motion / lite
+  else if (res.r === "lose") Sfx.play("sad"); else Sfx.play("whistle");
 }
 function showResult(res){
   const ch = res.md === 1, win = res.r === "win", me = res.team, sc = res.sc || [0, 0];
@@ -325,7 +341,7 @@ function showResult(res){
   show("result");
 }
 // the card shows only when there is something to redeem: a prize name from the server and a code; a lost single-player game never has one
-const hasPrize = res => !!(res && res.code && res.prize && res.prize.label && !(res.md === 1 && res.r !== "win"));
+const hasPrize = L3.hasPrize;
 function prizeCard(res){
   const has = hasPrize(res);
   $("#prize").hidden = !has; if (!has) return;
@@ -341,18 +357,19 @@ async function recheck(){
   if (screen === "result") prizeCard(res);
 }
 $("#again").addEventListener("click", () => {
-  Sfx.play("tap");
   if (G.last && G.last.solo){ startSolo(); return; }
   if (!G.room){ leaveAll(); show("multi"); return; }              // the room closed meanwhile
   G.rematch = true; $("#again").disabled = true; send({ t: "rematch" }); show("lobby"); renderRoom();
 });
-$("#back").addEventListener("click", () => { Sfx.play("tap"); if (G.room) send({ t: "leave" }); leaveAll(); show("mode"); });
+$("#back").addEventListener("click", () => { if (G.room) send({ t: "leave" }); leaveAll(); show("mode"); });
 $("#restRetry").addEventListener("click", async () => { const h = await Net.health(); applyHealth(h); if (!(h && h.closed)) show("home"); });
 
 /* ---------- sound, reconnect pill, debug, lite ---------- */
 function soundBtn(){ const b = $("#soundBtn"); b.textContent = Sfx.on ? "🔊" : "🔇"; b.setAttribute("aria-pressed", String(Sfx.on)); b.setAttribute("aria-label", Sfx.on ? "Sound on" : "Sound off"); }
 Sfx.init(); soundBtn();
 $("#soundBtn").addEventListener("click", () => { Sfx.unlock(); Sfx.setOn(!Sfx.on); soundBtn(); Sfx.play("tap"); });
+// every other button and link-button clicks (sound + a tiny buzz on phones that have one)
+document.addEventListener("click", e => { const b = e.target.closest("button, a.btn, .card"); if (b && b.id !== "soundBtn" && !b.disabled){ Sfx.play("tap"); buzz(8); } }, true);
 // the browser lets sound start only inside a tap; iOS counts touchend / click, Android pointerdown
 ["pointerdown", "touchend", "click"].forEach(n => document.addEventListener(n, () => Sfx.unlock(), { capture: true, passive: true }));
 let downSince = 0;
@@ -393,10 +410,11 @@ function frame(now){
   if (screen === "home") drawDemo(dt);
   else if (screen === "match") drawMatch(dt, now);
   else if (screen === "lobby") roomTick();
-  perfWatch(dt); sendInput(false); pillCheck(); dbg();
+  if (screen !== "match") Fx.setStands(null);
+  Fx.frame(dt); perfWatch(dt); sendInput(false); pillCheck(); dbg();
 }
 document.addEventListener("visibilitychange", () => {
-  if (document.hidden){ if (finger.a){ finger.a = 0; finger.id = null; sendInput(true); } cancelAnimationFrame(rafId); rafId = 0; return; }
+  if (document.hidden){ if (finger.a){ finger.a = 0; finger.id = null; sendInput(true); } cancelAnimationFrame(rafId); rafId = 0; Sfx.bedStop(); return; }
   lastT = performance.now(); if (!rafId) rafId = requestAnimationFrame(frame);
   sock.nudge(); if (screen === "result") recheck();
 });

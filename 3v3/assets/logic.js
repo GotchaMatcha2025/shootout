@@ -40,5 +40,7 @@ const CODE_ABC = "ACDEFHJKMNPQRTUVWXY34679";
 // typed game code: upper case, O read as 0, only the code alphabet kept (§12.5: S, 1, I, L, B never reach the server as a wrong try)
 const cleanCode = s => String(s || "").toUpperCase().replace(/O/g, "0").split("").filter(c => CODE_ABC.indexOf(c) >= 0).join("").slice(0, 4);
 const goals = n => n === 1 ? "1 goal" : n + " goals";
-root.L3 = { interp, stamp, shouldSend, histAt, toWorld, backoff, cleanCode, goals, CODE_ABC };
+// the result's prize card shows only when there is something to redeem: a code and a prize name; a lost game vs the bot never (§12.3, §13)
+const hasPrize = res => !!(res && res.code && res.prize && res.prize.label && !(res.md === 1 && res.r !== "win"));
+root.L3 = { interp, stamp, shouldSend, histAt, toWorld, backoff, cleanCode, goals, hasPrize, CODE_ABC };
 })(typeof globalThis !== "undefined" ? globalThis : this);

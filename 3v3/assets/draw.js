@@ -12,7 +12,7 @@ const Draw = (() => {
   const COL = { 0: { f: "#6fbf4a", d: "#3d7a26", name: "MATCHA", t: "Matcha" }, 1: { f: "#ffd23f", d: "#b88a00", name: "YUZU", t: "Yuzu" } };
   const REDUCED = !!(window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches);
   const K = () => Sim3.C;
-  const st = { lite: false };
+  const st = { lite: false, rip: null };   // rip = {j: 0 top net | 1 bottom net, a: 0–1}: the net shakes after a goal
 
   const faceCache = {};
   function faceCanvas(ci, team, px){
@@ -38,8 +38,9 @@ const Draw = (() => {
     [[0, -4], [H, 4]].forEach(([y, dy]) => {
       g.fillStyle = "#ffffff22"; g.fillRect(W / 2 - half, Math.min(y, y + dy), half * 2, 4);
       g.strokeStyle = "#ffffff40"; g.lineWidth = 0.15;
-      for (let x = W / 2 - half; x <= W / 2 + half; x += 1.2){ g.beginPath(); g.moveTo(x, y); g.lineTo(x, y + dy); g.stroke(); }
-      for (let k = 1; k < 4; k++){ g.beginPath(); g.moveTo(W / 2 - half, y + dy * k / 4); g.lineTo(W / 2 + half, y + dy * k / 4); g.stroke(); }
+      const rp = st.rip && st.rip.j === (y ? 1 : 0) && !REDUCED ? st.rip.a : 0, wob = (x, k) => rp ? Math.sin(x * 1.7 + k * 2 + st.rip.t * 30) * rp * 0.9 : 0;
+      for (let x = W / 2 - half; x <= W / 2 + half; x += 1.2){ g.beginPath(); g.moveTo(x, y); g.lineTo(x + wob(x, 0), y + dy); g.stroke(); }
+      for (let k = 1; k < 4; k++){ g.beginPath(); g.moveTo(W / 2 - half, y + dy * k / 4 + wob(0, k)); g.lineTo(W / 2 + half, y + dy * k / 4 + wob(W, k)); g.stroke(); }
       g.strokeStyle = "#fffbe6"; g.lineWidth = 0.7; g.beginPath(); g.moveTo(W / 2 - half, y); g.lineTo(W / 2 - half, y + dy); g.lineTo(W / 2 + half, y + dy); g.lineTo(W / 2 + half, y); g.stroke();
     });
     if (!st.lite) [[0, 0], [W, 0], [0, H], [W, H]].forEach(([x, y]) => { const rg = g.createRadialGradient(x, y, 0, x, y, 40);   // floodlight pools
@@ -65,6 +66,9 @@ const Draw = (() => {
     const RB = K().RB;
     if (!st.lite && !REDUCED && trail) trail.forEach(([x, y], i) => { g.fillStyle = "rgba(255,251,230," + (i / trail.length * 0.25) + ")"; g.beginPath(); g.arc(x, y, RB * (i / trail.length), 0, 7); g.fill(); });
     g.fillStyle = "#0006"; g.beginPath(); g.ellipse(b.x + 0.4, b.y + 0.6, RB, RB * 0.8, 0, 0, 7); g.fill();
+    if (b.fast && !st.lite){ g.save(); g.globalCompositeOperation = "lighter";   // the floodlights catch a moving ball
+      const gl = g.createRadialGradient(b.x, b.y, RB * 0.5, b.x, b.y, RB * 3.2); gl.addColorStop(0, "rgba(255,244,214,0.35)"); gl.addColorStop(1, "rgba(255,244,214,0)");
+      g.fillStyle = gl; g.beginPath(); g.arc(b.x, b.y, RB * 3.2, 0, 7); g.fill(); g.restore(); }
     if (st.lite) g.fillStyle = "#f4f6ef"; else { const rg = g.createRadialGradient(b.x - 0.4, b.y - 0.5, 0.2, b.x, b.y, RB); rg.addColorStop(0, "#fff"); rg.addColorStop(1, "#cfd6c9"); g.fillStyle = rg; }
     g.beginPath(); g.arc(b.x, b.y, RB, 0, 7); g.fill();
     g.fillStyle = "#1b2a20"; g.beginPath(); g.arc(b.x + 0.2, b.y, 0.45, 0, 7); g.fill(); g.beginPath(); g.arc(b.x - 0.7, b.y - 0.6, 0.25, 0, 7); g.fill(); g.beginPath(); g.arc(b.x - 0.5, b.y + 0.75, 0.25, 0, 7); g.fill();

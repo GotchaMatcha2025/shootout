@@ -172,6 +172,7 @@ const Fake = (() => {
     drop(ms){ refuse = Date.now() + (ms || 0); const s = sock; if (s){ sock = null; s.readyState = 3; gone(); setTimeout(() => s.onclose && s.onclose({}), 0); } },
     redeem(c){ const r = c ? results.find(x => x.code === c) : results[results.length - 1]; if (r) r.used = now(); return !!r; },
     close(on){ closed = on !== false; },
+    goal(team){ if (!match) return false; const C = S().C; match.m.b = { x: C.W / 2, y: team === 0 ? 1.5 : C.H - 1.5, vx: 0, vy: team === 0 ? -40 : 40 }; return true; },   // put the ball in a goal mouth
     state(){ return { room: room && { code: room.code, size: room.size, k: room.k, you: room.you }, match: match && { id: match.id, md: match.md, bot: match.bot, ack: match.ack, st: match.m.st }, results: results.slice(), acked, nIn, lastIn }; }
   };
   return { socket, post };

@@ -13,14 +13,14 @@ const C = {
   W: 60, H: 96, RP: 3.3, RB: 1.9, CREASE: 9, POST: .5,              // pitch, player and ball radii, goal circle, post radius
   GW0: 28, GW1: 40, GROW_AT_S: 15, GROW_PER_S: 8,                    // goals 28 wide, growing to 40 at 8/s from 15 s left
   COUNT_S: 3, MATCH_S: 60, CELEB_S: 2.6, DT: 1 / 60, SUB: 2,         // 2 physics sub-steps per 1/60 s step
-  HUMAN_MAX: 55, FOLLOW: 30, GLIDE: .8,                              // finger: 30x the gap a second, capped 55; finger up = x0.8 a sub-step
+  HUMAN_MAX: 95, FOLLOW: 45, GLIDE: .8,                              // finger: 45x the gap a second, capped 95 (owner ~21:14: 55 felt delayed); up = x0.8 a sub-step
   HUMAN_REACH: 1,                                                    // CTO G1: a human hits the ball at RP+RB+1.0, bots at RP+RB
   BOT_FAST: 55, BOT_GUARD: 34, BOT_SUPPORT: 30, BOT_LINE: 6, BOT_RECOVER_S: .35,
   HELP: .2, BALL_MAX: 75, DRAG: .32, WALL_E: .9, HIT_E: .85, POST_E: .8,
   SQUEEZE_V: 24, SLOW_V: 5, UNSTICK_S: 1.5, UNSTICK_V: 14,
   HIT_MIN: 6, HIT_FULL: 70, HIT_GAP_S: .12,                          // a touch is a "hit" event above impulse 6; p = impulse / 70
-  CHALLENGE_GOALS: 1, GW_CH: 16, HARD: 1.3, RESET_S: 1.5, KICKOFF_S: 1,   // vs the Matcha Bot: 1 goal wins, goals 16 and fixed
-  LEVEL_MIN: .5, LEVEL_MAX: 1.5, KEEPER_STUN_S: .25,                                     // botLevel scales the hard bot's speed and reactions
+  CHALLENGE_GOALS: 1, GW_CH: 14, HARD: 2.6, RESET_S: 1.5, KICKOFF_S: 1,   // vs the Matcha Bot: 1 goal wins, goals 14 and fixed, bot x2.6 (rev 8)
+  LEVEL_MIN: .5, LEVEL_MAX: 1.5, KEEPER_STUN_S: .05,                                     // botLevel scales the hard bot's speed and reactions
   ST_COUNT: 0, ST_PLAY: 1, ST_GOAL: 2, ST_DRAW: 3, ST_END: 4, ST_RESET: 5,   // 3 = time up (versus: draw; challenge: the bot wins, w set)
   TEAMS: [{ name: "Matcha", col: "#6fbf4a" }, { name: "Yuzu", col: "#ffd23f" }]
 };
@@ -181,7 +181,7 @@ function movePlayers(m, h, slow, ev) {
   const P = m.p;
   for (const q of P) {
     if (!q.bot) { follow(q, q.ix, q.iy, q.ia, h); continue; }
-    // the Matcha Bot runs at 1.3x; botLevel speeds up its striking only (a faster keeper overshoots its line and saves less)
+    // the Matcha Bot runs at 2.6x; botLevel speeds up its striking only (a faster keeper overshoots its line and saves less)
     const max = (q.fast ? C.BOT_FAST : (q.role === "guard" ? C.BOT_GUARD : C.BOT_SUPPORT)) * (q.hard ? C.HARD * (q.role === "guard" ? 1 : m.lvl) : 1);
     const dx = q.tx - q.x, dy = q.ty - q.y, d = Math.hypot(dx, dy), sp = Math.min(max, d * 8);
     const vx = d > .01 ? dx / d * sp : 0, vy = d > .01 ? dy / d * sp : 0, k = Math.min(1, h * 10);

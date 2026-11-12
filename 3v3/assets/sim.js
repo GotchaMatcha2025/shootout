@@ -20,7 +20,7 @@ const C = {
   SQUEEZE_V: 24, SLOW_V: 5, UNSTICK_S: 1.5, UNSTICK_V: 14,
   HIT_MIN: 6, HIT_FULL: 70, HIT_GAP_S: .12,                          // a touch is a "hit" event above impulse 6; p = impulse / 70
   CHALLENGE_GOALS: 1, GW_CH: 14, HARD: 2.6, RESET_S: 1.5, KICKOFF_S: 1,   // vs the Matcha Bot: 1 goal wins, goals 14 and fixed, bot x2.6 (rev 8)
-  LEVEL_MIN: .5, LEVEL_MAX: 1.5, KEEPER_STUN_S: .05,                                     // botLevel scales the hard bot's speed and reactions
+  LEVEL_MIN: .5, LEVEL_MAX: 1.5, KEEPER_STUN_S: .25,                                     // botLevel scales the hard bot's speed and reactions
   ST_COUNT: 0, ST_PLAY: 1, ST_GOAL: 2, ST_DRAW: 3, ST_END: 4, ST_RESET: 5,   // 3 = time up (versus: draw; challenge: the bot wins, w set)
   TEAMS: [{ name: "Matcha", col: "#6fbf4a" }, { name: "Yuzu", col: "#ffd23f" }]
 };
@@ -236,8 +236,8 @@ function movePlayers(m, h, slow, ev) {
     const q = h[0];
     // at most one hit event per 0.12 s a match (≤ 500): a 2 v 2 face-off ping-pongs ~12 real bounces a second; the physics is unchanged
     if (m.n - m.lh >= Math.round(C.HIT_GAP_S / C.DT)) { m.lh = m.n; ev.push({ k: "hit", team: q.team, slot: q.slot, p: r2(Math.min(1, h[1] / C.HIT_FULL)) }); }
-    // a striker backs off after a hit; the Matcha Bot's keeper only blinks after a save (shorter at a higher botLevel): the human's one chance
-    if (q.bot) q.recover = q.hard && q.role === "guard" ? C.KEEPER_STUN_S / (m.lvl * m.lvl) : C.BOT_RECOVER_S;
+    // a striker backs off after a hit; the Matcha Bot's keeper stays on its line after a save, and blinks only below botLevel 1 (easier)
+    if (q.bot) q.recover = q.hard && q.role === "guard" ? C.KEEPER_STUN_S * Math.max(0, 1 / (m.lvl * m.lvl) - 1) : C.BOT_RECOVER_S;
   }
 }
 

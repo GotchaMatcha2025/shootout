@@ -23,20 +23,11 @@ test('reconnect forever: grows from ~0.5 s and never passes 12.5 s', () => {
   assert.equal(WC.backoff(3, 0.5), 4000);
   for (const n of [5, 9, 50, 1e6]) { const d = WC.backoff(n, 1); assert.ok(d > 0 && d <= 12500, n + ' → ' + d); }
 });
-test('labels: single player = VS THE MATCHA BOT, multiplayer = its size', () => {
-  assert.equal(WC.modeLabel(1, 1), 'VS THE MATCHA BOT');
-  assert.equal(WC.modeLabel('solo', 1), 'VS THE MATCHA BOT');
+test('labels: single player = VS MATCHA BOT, multiplayer = its size', () => {
+  assert.equal(WC.modeLabel(1, 1), 'VS MATCHA BOT');
+  assert.equal(WC.modeLabel('solo', 1), 'VS MATCHA BOT');
   assert.equal(WC.modeLabel(0, 1), '1 V 1');
   assert.equal(WC.modeLabel(0, 2), '2 V 2');
-});
-test('info line: only what the server sent; nothing when nothing waits', () => {
-  const now = 1_000_000;
-  assert.equal(WC.infoLine({ k: now + 12000, humans: [1, 1] }, [], now), 'Next kick-off 0:12 · 2 players waiting');
-  assert.equal(WC.infoLine({ k: now + 1000, humans: [1, 0] }, [], now), 'Next kick-off 0:01 · 1 player waiting');
-  assert.equal(WC.infoLine({ k: now - 1, humans: [2, 0] }, [], now), '');   // a stale kick-off is not shown
-  assert.equal(WC.infoLine(null, ['a', 'b', 'c'], now), '3 matches on now');
-  assert.equal(WC.infoLine(null, ['a'], now), '');
-  assert.equal(WC.infoLine(undefined, undefined, now), '');
 });
 const snap = (x, tl, extra) => Object.assign({ st: 1, tl, gw: 28, md: 0, sc: [0, 0], b: [x, 50], p: [[x, 10], [x, 80]] }, extra);
 test('drawn ~100 ms behind: halfway between two snapshots is halfway', () => {
@@ -58,15 +49,12 @@ test('cheers: versus first goal wins; draw at time up', () => {
 });
 test("cheers: single player uses the server's need; bot goals only restart play", () => {
   assert.deepEqual(WC.goalText(1, 1, [0, 1], 0, 1, false), { text: 'MATCHA BOT SCORES', party: false, end: false });
-  assert.equal(WC.goalText(1, 0, [1, 3], 0, 1, false).text, 'MATCHA BOT BEATEN!');   // need 1: the first goal wins
-  assert.equal(WC.goalText(1, 0, [1, 0], 0, 2, false).text, 'GOAL!');                // need 2: one more to go
-  assert.equal(WC.goalText(1, 0, [2, 0], 0, 2, false).text, 'MATCHA BOT BEATEN!');
-  assert.equal(WC.goalText(1, 0, [1, 0], 0, null, true).text, 'MATCHA BOT BEATEN!');  // need unknown: the server ending it (st 2) decides
+  assert.equal(WC.goalText(1, 0, [1, 3], 0, 1, false).text, 'GOAL! BOT BEATEN');    // need 1: the first goal wins
+  assert.equal(WC.goalText(1, 0, [1, 0], 0, 2, false).text, 'GOAL!');               // need 2: one more to go
+  assert.equal(WC.goalText(1, 0, [2, 0], 0, 2, false).text, 'GOAL! BOT BEATEN');
+  assert.equal(WC.goalText(1, 0, [1, 0], 0, null, true).text, 'GOAL! BOT BEATEN');   // need unknown: the server ending it (st 2) decides
   assert.equal(WC.goalText(1, 0, [1, 0], 0, null, false).text, 'GOAL!');
-  assert.equal(WC.timeUpText(1).text, 'THE MATCHA BOT WINS');
-  assert.equal(WC.needLine(1), 'ONE GOAL WINS');
-  assert.equal(WC.needLine(3), 'SCORE 3 TO WIN');
-  assert.equal(WC.needLine(null), '');
+  assert.equal(WC.timeUpText(1).text, 'MATCHA BOT WINS');
 });
 test('scorer: the team whose drawn score went up', () => {
   assert.equal(WC.scorer([0, 0], [1, 0]), 0);

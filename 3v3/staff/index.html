@@ -38,7 +38,6 @@ p{margin:0}
 .card p{font:800 17px/1.35 var(--font)}
 .card.warn{border-color:var(--amber)} .card.warn .head{color:var(--amber);font-size:26px}
 .card.bad{border-color:var(--red)} .card.bad .head{color:var(--red);font-size:30px}
-.offline{background:var(--amber);color:#1a1200;font:900 14px/1.2 var(--font);padding:6px 10px;border-radius:8px;align-self:flex-start}
 .status{border-radius:18px;padding:16px;display:flex;flex-direction:column;gap:6px}
 .status .head{font:900 28px/1.1 var(--font)}
 .status p{font:800 16px/1.35 var(--font)}
@@ -72,11 +71,11 @@ p{margin:0}
   </section>
   <section id="main" hidden style="display:flex;flex-direction:column;gap:14px">
     <div class="top"><h1>Check a prize code</h1><button class="btn" id="logout" type="button" style="min-height:44px;font-size:14px">Log out</button></div>
-    <p class="how">Customer shows the code · you hold to redeem · green = give the prize</p>
+    <p class="how">Customer shows the code · you hold to redeem · green = give the prize · codes last 30 min</p>
     <input class="code" id="code" maxlength="10" placeholder="CODE" aria-label="Prize code, 6 characters" autocomplete="off" autocorrect="off"
       autocapitalize="characters" spellcheck="false" inputmode="text" enterkeyhint="done">
     <div class="row"><span class="sub" id="count">0 of 6</span><span class="sub" id="drop" hidden>Codes never use O 0 I 1 L S 5 B 8 Z 2 G</span></div>
-    <div class="card" id="card" hidden aria-live="polite"><div class="head" id="head"></div><span class="offline" id="offline" hidden>Played offline</span><div id="lines"></div></div>
+    <div class="card" id="card" hidden aria-live="polite"><div class="head" id="head"></div><div id="lines"></div></div>
     <div class="status" id="status" hidden role="status"><div class="head" id="sHead"></div><div id="sLines"></div></div>
     <button class="hold" id="hold" type="button" hidden><span class="fill"></span><span class="t" id="holdT">Hold 1.5 s to redeem</span></button>
     <div class="row"><button class="btn" id="retry" type="button" hidden>Try again</button><button class="btn" id="next" type="button" hidden style="margin-left:auto">Next code</button></div>

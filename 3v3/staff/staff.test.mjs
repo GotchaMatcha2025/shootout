@@ -38,9 +38,9 @@ test('mode line: Matcha Bot with the score; multiplayer with its size', () => {
   assert.equal(SC.modeText({ r: 'draw', md: 0 }), 'Multiplayer: draw');
 });
 test('check: an unused code shows result, mode, time, prize, and offers the hold', () => {
-  const v = SC.checkView({ ok: true, status: 200, r: 'win', md: 0, size: 2, at, prize: null, used: null }, 'ACDEF3');
+  const v = SC.checkView({ ok: true, status: 200, r: 'win', md: 0, size: 2, at, prize: null, used: null }, 'ACDEF3', at + 12 * 60000 + 5000);
   assert.equal(v.head, 'WIN');
-  assert.deepEqual(v.lines, ['2 v 2: won', 'Played at 20:41', 'Prize: not set yet']);
+  assert.deepEqual(v.lines, ['2 v 2: won', 'Played at 20:41 · 12 min ago', 'Prize: not set yet']);
   assert.equal(v.canRedeem, true); assert.equal(v.status.head, 'Not used yet'); assert.equal(v.offline, false);
   assert.equal(SC.checkView({ ok: true, r: 'lose', md: 0, size: 1, at, prize: { label: '$1 off' }, used: null }, 'X').lines[2], 'Prize: $1 off');
 });
@@ -49,7 +49,18 @@ test('check: a used code is red with its time and no hold; not found is red; no 
   assert.deepEqual([u.status.tone, u.status.head, u.canRedeem], ['bad', 'ALREADY USED at 20:41', false]);
   assert.deepEqual([SC.checkView({ ok: false, status: 404 }).tone, SC.checkView({ ok: false, status: 404 }).head], ['bad', 'NOT FOUND']);
   for (const r of [{ net: true }, { ok: false, status: 500 }, null]) { const v = SC.checkView(r); assert.deepEqual([v.tone, v.head, !!v.canRedeem], ['warn', 'No answer, try again', false]); }
-  assert.equal(SC.checkView({ ok: true, r: 'win', md: 1, sc: [1, 0], at, used: null }, 'L-WXY379').offline, true);
+});
+test('check: an L- code (plan-B offline game) is amber "Offline game · no prize" with no hold, used or not', () => {
+  for (const used of [null, at]) {
+    const v = SC.checkView({ ok: true, r: 'win', md: 1, sc: [1, 0], at, prize: { label: 'Free yuzu' }, used }, 'L-WXY379');
+    assert.deepEqual([v.status.tone, v.status.head, v.canRedeem, v.lines[2]], ['warn', 'Offline game · no prize', false, 'Prize: not set yet']);
+  }
+});
+test("code age for the staff's 30-minute limit", () => {
+  assert.equal(SC.ago(at, at + 20000), ' · just now');
+  assert.equal(SC.ago(at, at + 29 * 60000 + 59000), ' · 29 min ago');
+  assert.equal(SC.ago(at, at + 61 * 60000), ' · over 1 h ago');
+  assert.equal(SC.ago(null, at), '');
 });
 test("redeem: green only on the server's yes", () => {
   const ok = SC.redeemView({ ok: true, status: 200, used: at }, { prize: { label: 'Free yuzu' } });

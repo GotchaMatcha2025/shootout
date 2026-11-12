@@ -36,17 +36,25 @@ var StaffCore = (function () {
     return (r.md == null ? "" : "Multiplayer: ") + w;
   }
   function prizeLine(p) { return p && p.label ? "Prize: " + p.label : "Prize: not set yet"; }
-  // the check: what this code is and whether it can still be used. tone: ok (green) / bad (red) / warn (amber)
-  function checkView(res, code) {
+  // how old the code is, for the 30-minute limit staff see (the server still refuses an old code itself)
+  function ago(at, now) {
+    if (typeof at !== "number" || typeof now !== "number") return "";
+    var m = Math.floor((now - at) / 60000);
+    return m < 1 ? " · just now" : m < 60 ? " · " + m + " min ago" : " · over 1 h ago";
+  }
+  // the check: what this code is and whether it can still be used. tone: ok (green) / bad (red) / warn (amber).
+  // L- codes are plan-B games played on the phone while the server was down: never a prize (contract §12.3)
+  function checkView(res, code, now) {
     var off = code && code.indexOf("L-") >= 0;
     if (!res || res.net) return { tone: "warn", head: "No answer, try again", retry: true };
     if (res.status === 404) return { tone: "bad", head: "NOT FOUND", lines: ["Check the code with the customer."] };
     if (res.status === 503) return { tone: "warn", head: "Not set up yet", lines: ["Tell Vin or Kai."], retry: true };
     if (!res.ok) return { tone: "warn", head: "No answer, try again", retry: true };
     var head = res.r === "win" ? "WIN" : res.r === "lose" ? "LOSE" : res.r === "draw" ? "DRAW" : "?";
-    var lines = [modeText(res), "Played at " + clock(res.at), prizeLine(res.prize)];
-    var v = { tone: "info", head: head, lines: lines, offline: off, canRedeem: !res.used };
-    if (res.used) { v.status = { tone: "bad", head: "ALREADY USED at " + clock(res.used) }; v.canRedeem = false; }
+    var lines = [modeText(res), "Played at " + clock(res.at) + ago(res.at, now), prizeLine(off ? null : res.prize)];
+    var v = { tone: "info", head: head, lines: lines, offline: off, canRedeem: !res.used && !off };
+    if (off) v.status = { tone: "warn", head: "Offline game · no prize" };
+    else if (res.used) { v.status = { tone: "bad", head: "ALREADY USED at " + clock(res.used) }; v.canRedeem = false; }
     else v.status = { tone: "info", head: "Not used yet" };
     return v;
   }
@@ -78,7 +86,7 @@ var StaffCore = (function () {
     return [["Matches", n(c.matches)], ["Plays", n(c.humans != null ? c.humans : c.plays)], ["Won", n(c.wins)], ["Lost", n(c.losses)], ["Draws", n(c.draws)],
       ["Codes used", n(c.used != null ? c.used : c.codesUsed)]];
   }
-  return { ALPHA: ALPHA, BASES: BASES, pickMode: pickMode, clean: clean, clock: clock, modeText: modeText, checkView: checkView, redeemView: redeemView,
+  return { ALPHA: ALPHA, BASES: BASES, pickMode: pickMode, clean: clean, clock: clock, ago: ago, modeText: modeText, checkView: checkView, redeemView: redeemView,
     loginError: loginError, tiles: tiles };
 })();
 if (typeof module === "object" && module.exports) module.exports = StaffCore;
@@ -150,7 +158,7 @@ if (typeof window !== "undefined" && window.document) (function () {
     var mine = cur;
     out("/staff/check", { code: code }, 5000).then(function (r) {
       if (cur !== mine || r.loggedOut) return;
-      mine.res = r; mine.view = SC.checkView(r, code); paint(mine.view, mine.view.status || null);
+      mine.res = r; mine.view = SC.checkView(r, code, Date.now()); paint(mine.view, mine.view.status || null);
     });
   }
   function paint(v, status) {
@@ -161,7 +169,6 @@ if (typeof window !== "undefined" && window.document) (function () {
       $("#head").textContent = v.head;
       $("#lines").innerHTML = "";
       (v.lines || []).forEach(function (l) { var p = document.createElement("p"); p.textContent = l; $("#lines").appendChild(p); });
-      $("#offline").hidden = !v.offline;
     }
     if (status) {
       st.className = "status " + status.tone; $("#sHead").textContent = status.head;

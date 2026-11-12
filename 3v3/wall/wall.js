@@ -7,8 +7,6 @@ var WallCore = (function () {
   var TEAM = ["MATCHA", "YUZU"];
   var BASES = { live: "https://gotcha-shootout-3v3.long-fog-ae60.workers.dev", staging: "https://gotcha-shootout-3v3-staging.long-fog-ae60.workers.dev",
     local: "http://localhost:8787", fake: "http://fake.invalid" };
-  function pad2(n) { return (n < 10 ? "0" : "") + n; }
-  function mmss(ms) { var s = Math.max(0, Math.ceil(ms / 1000)); return Math.floor(s / 60) + ":" + pad2(s % 60); }
   // ?api= wins and is remembered for the tab; the Mac (localhost / file) defaults to staging, everything else to live
   function pickMode(asked, saved, host, proto) {
     if (BASES[asked]) return asked;
@@ -19,14 +17,7 @@ var WallCore = (function () {
   // reconnect forever: 0.5 s, 1 s, 2 s … capped at 10 s, ±25% so a room of walls doesn't knock at once
   function backoff(n, r) { return Math.round(Math.min(10000, 500 * Math.pow(2, Math.min(n, 5))) * (0.75 + 0.5 * r)); }
   function isSolo(md) { return md === 1 || md === "challenge" || md === "solo"; }
-  function modeLabel(md, size) { return isSolo(md) ? "VS THE MATCHA BOT" : size + " V " + size; }
-  // the line under the pitch; only facts the server sent (old clock kick-offs or the live match count), else nothing
-  function infoLine(lobby, live, now) {
-    var n = lobby && lobby.humans ? (lobby.humans[0] || 0) + (lobby.humans[1] || 0) : 0;
-    if (n > 0 && lobby.k > now) return "Next kick-off " + mmss(lobby.k - now) + " · " + n + (n === 1 ? " player waiting" : " players waiting");
-    var m = live ? live.length : 0;
-    return m >= 2 ? m + " matches on now" : "";
-  }
+  function modeLabel(md, size) { return isSolo(md) ? "VS MATCHA BOT" : size + " V " + size; }
   function lerp(a, b, k) { return a + (b - a) * k; }
   // position at time t from snapshots stamped on arrival; a jump of more than 12 units (a kick-off reset) is not slid across
   function sample(buf, t) {
@@ -46,11 +37,10 @@ var WallCore = (function () {
   function goalText(md, w, sc, humanTeam, need, ended) {
     if (!isSolo(md)) return { text: "GOAL! TEAM " + TEAM[w], party: true, end: true };
     if (w !== humanTeam) return { text: "MATCHA BOT SCORES", party: false, end: false };
-    if (ended || (need && sc && sc[w] >= need)) return { text: "MATCHA BOT BEATEN!", party: true, end: true };
+    if (ended || (need && sc && sc[w] >= need)) return { text: "GOAL! BOT BEATEN", party: true, end: true };
     return { text: "GOAL!", party: true, end: false };
   }
-  function needLine(need) { return !need ? "" : need === 1 ? "ONE GOAL WINS" : "SCORE " + need + " TO WIN"; }
-  function timeUpText(md) { return isSolo(md) ? { text: "THE MATCHA BOT WINS", party: false, end: true } : { text: "DRAW", party: false, end: true }; }
+  function timeUpText(md) { return isSolo(md) ? { text: "MATCHA BOT WINS", party: false, end: true } : { text: "DRAW", party: false, end: true }; }
   // the team whose score went up between two drawn frames (-1 = none)
   function scorer(prev, cur) {
     if (!prev || !cur) return -1;
@@ -58,8 +48,8 @@ var WallCore = (function () {
     if ((cur[1] || 0) > (prev[1] || 0)) return 1;
     return -1;
   }
-  return { TEAM: TEAM, BASES: BASES, mmss: mmss, pickMode: pickMode, wsUrl: wsUrl, backoff: backoff, isSolo: isSolo, modeLabel: modeLabel,
-    infoLine: infoLine, sample: sample, goalText: goalText, needLine: needLine, timeUpText: timeUpText, scorer: scorer };
+  return { TEAM: TEAM, BASES: BASES, pickMode: pickMode, wsUrl: wsUrl, backoff: backoff, isSolo: isSolo, modeLabel: modeLabel,
+    sample: sample, goalText: goalText, timeUpText: timeUpText, scorer: scorer };
 })();
 if (typeof module === "object" && module.exports) module.exports = WallCore;
 
@@ -71,7 +61,7 @@ if (typeof window !== "undefined" && window.document) (function () {
   // the four cat faces of the approved mock-up (crop centre + radius in the source image)
   var CATS = [{ f: "cat-ok-gotcha-cream.webp", cx: 305, cy: 284, r: 132 }, { f: "cat-barista-cream.webp", cx: 326, cy: 309, r: 128 },
     { f: "cat-whisk-ride-cream.webp", cx: 450, cy: 80, r: 84 }, { f: "matcha-deprived-cream.webp", cx: 300, cy: 240, r: 150 }];
-  var DEMO_CATS = [[0, 1, 2], [3, 0, 1]], DEMO_SIZE = 2;
+  var DEMO_CATS = [[0, 1, 2], [3, 2, 0]], DEMO_SIZE = 2;   // rev 3 demo: 2 v 2, cats [[0,1],[3,2]]
   // images: the 3v3 assets folder first, then the repo's shared one (whichever exists after the switch)
   CATS.forEach(function (c) {
     c.img = new Image(); c.img.onerror = function () { if (!c.tried) { c.tried = 1; c.img.src = "../../assets/img/" + c.f; } };
@@ -88,7 +78,7 @@ if (typeof window !== "undefined" && window.document) (function () {
   if (mode === "fake") { var fs = document.createElement("script"); fs.src = "fake.js?v=1"; document.head.appendChild(fs); }
 
   /* ---------- state ---------- */
-  var S = { online: false, closed: false, lobby: null, live: [], F: null, demo: null, demoAcc: 0, view: null, prevSc: null, prevSt: -1,
+  var S = { online: false, closed: false, F: null, demo: null, demoAcc: 0, view: null, prevSc: null, prevSt: -1,
     cel: null, trail: [], soundOn: false };
   if (mode === "fake") window.__wall = S;   // tests read the state on the fake feed only
   function newFeatured(m) {
@@ -128,7 +118,7 @@ if (typeof window !== "undefined" && window.document) (function () {
 
   function onMsg(m) {
     var now = performance.now();
-    if (m.t === "wall") { S.lobby = m.lobby || null; S.live = m.live || []; if (typeof m.now === "number") S.skew = m.now - Date.now(); if (m.closed != null) S.closed = !!m.closed; return; }
+    if (m.t === "wall") { if (m.closed != null) S.closed = !!m.closed; return; }   // the heartbeat; GET / is the closed switch's main source
     if (m.t === "start") { S.F = newFeatured(m); S.F.lastAt = now; S.prevSc = null; S.prevSt = -1; S.cel = null; S.trail = []; return; }
     if (m.t === "s") {
       var F = S.F, n = m.p ? m.p.length : 0, last = F && F.buf.length ? F.buf[F.buf.length - 1].s : null;
@@ -299,13 +289,11 @@ if (typeof window !== "undefined" && window.document) (function () {
     text(right, CW / 2 + gap, CH * 0.075, body, COL[1].f, "left");
     var first = v.st === 0 && v.tl >= 59950;
     text(first ? "–" : String(Math.ceil(v.tl / 1000)), CW / 2, CH * 0.078, big, "#fffbe6", "center");
-    if (solo && info.need) text(WC.needLine(info.need), CW / 2, CH * 0.135, "900 " + Math.round(fs * 0.42) + "px Nunito, sans-serif", "rgba(255,251,230,.8)", "center");
-    // bottom row: LIVE / DEMO with its dot, the info line, the call to play
+    // bottom row: LIVE / DEMO with its dot, the call to play (fewest words, owner 12 Nov ~20:52)
     var small = "900 " + Math.round(fs * 0.48) + "px Nunito, sans-serif", y = CH * 0.967;
     g.fillStyle = info.live ? "#ff6b5b" : "#9db5a3"; g.beginPath(); g.arc(CH * 0.04, y, CH * 0.011, 0, 7); g.fill();
     text(info.live ? "LIVE · " + WC.modeLabel(info.md, v.p.length / 2) : "DEMO · BOTS PLAYING", CH * 0.06, y, small, "rgba(255,251,230,.85)", "left");
-    if (info.line) text(info.line, CW / 2, y, small, "rgba(255,251,230,.85)", "center");
-    text(S.closed ? "BACK SOON" : "SCAN THE BANNER QR TO PLAY", CW - CH * 0.04, y, small, "#ffd23f", "right");
+    text(S.closed ? "BACK SOON" : "SCAN TO PLAY", CW - CH * 0.04, y, small, "#ffd23f", "right");
     if (S.cel && S.cel.text) {
       var f2 = "400 " + Math.round(fs * (S.cel.text.length > 14 ? 1.9 : 2.4)) + "px 'Bowlby One', Impact, sans-serif";
       text(S.cel.text, CW / 2 + 4, CH * 0.55 + 5, f2, "rgba(0,0,0,.66)", "center"); text(S.cel.text, CW / 2, CH * 0.55, f2, "#fffbe6", "center");
@@ -371,7 +359,6 @@ if (typeof window !== "undefined" && window.document) (function () {
         info = { live: false, md: 0, need: null, cats: DEMO_CATS, bots: [[1, 1, 1], [1, 1, 1]] };
       }
       if (S.cel && now > S.cel.until) S.cel = null;
-      info.line = WC.infoLine(S.lobby, S.live, Date.now() + (S.skew || 0));
       if (!v) v = { st: 0, tl: 60000, gw: 28, b: [W / 2, H / 2], p: [], sc: null };
       if (!REDUCED) { S.trail.push([v.b[0], v.b[1]]); if (S.trail.length > 12) S.trail.shift(); }
       render(v, info, dt);

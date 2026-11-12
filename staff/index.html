@@ -3,29 +3,16 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#0b150f">
 <meta name="robots" content="noindex">
-<title>Gotcha Shootout · Staff</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800;900&display=swap" media="print" onload="this.media='all'">
-<link rel="stylesheet" href="../assets/shootout.css">
+<title>Gotcha Shootout · staff</title>
+<style>html,body{margin:0;height:100%;background:#07110b;color:#f3ead6;font:700 18px/1.4 system-ui,sans-serif}a{color:#ffd23f}p{padding:24px;text-align:center}</style>
+<script>
+/* The printed banner QR opens this address. The game lives at /shootout/3v3/staff/ (owner 12 Nov 2026: the 3v3 replaced the penalty game).
+   Keep the query (api=…, join=…); the old cup-card ?c= is dropped. */
+(function(){var q=location.search.replace(/^\?/,"").split("&").filter(function(p){return p&&p.indexOf("c=")!==0;}).join("&");
+location.replace("/shootout/3v3/staff/"+(q?"?"+q:"")+location.hash);})();
+</script>
+<noscript><meta http-equiv="refresh" content="0; url=/shootout/3v3/staff/"></noscript>
 </head>
-<body>
-<main>
-  <div class="staff-body" id="staffPin">
-    <h2>Staff</h2>
-    <p class="staff-stale" id="testNote" hidden>TEST SERVER: nothing here is real.</p>
-    <p class="sub">Type the staff PIN (6 numbers). Ask Vin or Kai if you don't have it.</p>
-    <div class="pin-dots" id="pinDots"><i></i><i></i><i></i><i></i><i></i><i></i></div>
-    <p class="err" id="pinErr" role="alert" hidden>Wrong PIN. Try again.</p>
-    <div class="pad" id="pad"></div>
-  </div>
-  <div class="staff-body" id="staffMain" hidden></div>
-</main>
-<script src="../assets/vendor/qrcode.min.js"></script>
-<script src="../assets/judge.js"></script>
-<script src="../assets/core.js"></script>
-<script src="../assets/staff.js"></script>
-</body>
+<body><p><a href="/shootout/3v3/staff/">▶ Play Gotcha Shootout</a></p></body>
 </html>

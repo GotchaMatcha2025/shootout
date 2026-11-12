@@ -3,64 +3,16 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#08110c">
 <meta name="robots" content="noindex">
 <title>Gotcha Shootout</title>
-<meta name="description" content="Beat our keeper. A penalty shootout at the Gotcha Matcha booth, OCBC Arena, 13–15 Nov 2026.">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800;900&display=swap" media="print" onload="this.media='all'">
-<link rel="preload" href="assets/fonts/gotcha.woff" as="font" type="font/woff" crossorigin>
-<link rel="stylesheet" href="assets/shootout.css">
+<style>html,body{margin:0;height:100%;background:#07110b;color:#f3ead6;font:700 18px/1.4 system-ui,sans-serif}a{color:#ffd23f}p{padding:24px;text-align:center}</style>
+<script>
+/* The printed banner QR opens this address. The game lives at /shootout/3v3/ (owner 12 Nov 2026: the 3v3 replaced the penalty game).
+   Keep the query (api=…, join=…); the old cup-card ?c= is dropped. */
+(function(){var q=location.search.replace(/^\?/,"").split("&").filter(function(p){return p&&p.indexOf("c=")!==0;}).join("&");
+location.replace("/shootout/3v3/"+(q?"?"+q:"")+location.hash);})();
+</script>
+<noscript><meta http-equiv="refresh" content="0; url=/shootout/3v3/"></noscript>
 </head>
-<body>
-<main class="app" id="app">
-  <canvas class="pitch" id="pitch" aria-label="Penalty pitch: swipe up from the ball to shoot"></canvas>
-  <canvas class="fxlayer" id="fx" aria-hidden="true"></canvas>
-  <div class="test-ribbon" id="testRibbon" hidden>TEST SERVER</div>
-  <button class="sound" id="soundBtn" aria-pressed="true" aria-label="Sound on">🔊</button>
-  <div class="hud" id="hud" hidden>
-    <div class="hud-shot" id="hudShot">SHOT 1 OF 3 · <em>EASY</em></div>
-    <div class="dots" id="hudDots"></div>
-  </div>
-  <div class="callout" id="callout" aria-live="polite"></div>
-  <div class="hint" id="hint" hidden><span class="finger"></span><span id="hintText">Swipe up to shoot</span></div>
-
-  <section class="sheet" id="landing" aria-labelledby="gameTitle">
-    <div class="brandrow">
-      <img class="logo" src="assets/img/logo-lockup-white.webp" alt="Gotcha Matcha" width="150" height="46">
-      <img class="cat-fly" src="assets/img/cat-whisk-ride-cream.webp" alt="" width="118" height="89">
-    </div>
-    <h1 class="title" id="gameTitle">SHOOTOUT</h1>
-    <p class="lede" id="lede">1 free shot. Beat our keeper.</p>
-    <div class="cup" id="cupBanner" hidden></div>
-    <p class="err" id="pausedMsg" hidden></p>
-    <div class="field">
-      <label for="nick">YOUR NICKNAME (HAT TRICKS GO ON THE BIG SCREEN)</label>
-      <input class="input" id="nick" maxlength="12" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="e.g. STRIKER7">
-    </div>
-    <p class="err" id="landErr" role="alert" hidden></p>
-    <button class="btn glow" id="playBtn">Take your free shot ⚽</button>
-    <button class="linkbtn" id="haveCup">Bought a drink? Type your cup card code</button>
-    <div class="row" id="cupEntry" hidden>
-      <input class="input" id="cupCode" maxlength="8" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="6 letters" aria-label="Cup card code">
-      <button class="btn ghost" id="cupGo" style="flex:0 0 auto">Unlock</button>
-    </div>
-    <div class="foot"><a href="rules/">Rules</a><span>No sign-up · nickname only · we gotcha</span></div>
-  </section>
-
-  <section class="sheet full" id="result" hidden></section>
-  <section class="sheet full" id="fallback" hidden>
-    <p class="eyebrow">GOTCHA MATCHA</p>
-    <h1 class="title" style="font-size:40px">Can't reach the game</h1>
-    <p class="lede">The signal's weak right now. The drinks are still here 👀</p>
-    <div class="cta"><h3>Menu</h3><div class="menu" id="fbMenu"></div></div>
-    <button class="btn" id="fbRetry">Try the game again</button>
-  </section>
-</main>
-<script src="assets/judge.js"></script>
-<script src="assets/core.js"></script>
-<script src="assets/pitch.js"></script>
-<script src="assets/play.js"></script>
-</body>
+<body><p><a href="/shootout/3v3/">▶ Play Gotcha Shootout</a></p></body>
 </html>

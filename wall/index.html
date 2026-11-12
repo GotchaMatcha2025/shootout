@@ -2,21 +2,17 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex">
-<title>Gotcha Shootout · Wall</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800;900&display=swap" media="print" onload="this.media='all'">
-<link rel="preload" href="../assets/fonts/gotcha.woff" as="font" type="font/woff" crossorigin>
-<link rel="stylesheet" href="../assets/shootout.css">
+<title>Gotcha Shootout · big screen</title>
+<style>html,body{margin:0;height:100%;background:#07110b;color:#f3ead6;font:700 18px/1.4 system-ui,sans-serif}a{color:#ffd23f}p{padding:24px;text-align:center}</style>
+<script>
+/* The printed banner QR opens this address. The game lives at /shootout/3v3/wall/ (owner 12 Nov 2026: the 3v3 replaced the penalty game).
+   Keep the query (api=…, join=…); the old cup-card ?c= is dropped. */
+(function(){var q=location.search.replace(/^\?/,"").split("&").filter(function(p){return p&&p.indexOf("c=")!==0;}).join("&");
+location.replace("/shootout/3v3/wall/"+(q?"?"+q:"")+location.hash);})();
+</script>
+<noscript><meta http-equiv="refresh" content="0; url=/shootout/3v3/wall/"></noscript>
 </head>
-<body>
-<div class="wall-fit" id="wallFit"></div>
-<div class="w-start" id="wCtl"><button id="wSound">🔈 Sound on</button><button id="wFull">Full screen</button></div>
-<script src="../assets/judge.js"></script>
-<script src="../assets/core.js"></script>
-<script src="../assets/pitch.js"></script>
-<script src="../assets/wall.js"></script>
-</body>
+<body><p><a href="/shootout/3v3/wall/">▶ Play Gotcha Shootout</a></p></body>
 </html>

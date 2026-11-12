@@ -20,7 +20,8 @@ const C = {
   SQUEEZE_V: 24, SLOW_V: 5, UNSTICK_S: 1.5, UNSTICK_V: 14,
   HIT_MIN: 6, HIT_FULL: 70, HIT_GAP_S: .12,                          // a touch is a "hit" event above impulse 6; p = impulse / 70
   CHALLENGE_GOALS: 1, GW_CH: 14, HARD: 2.6, RESET_S: 1.5, KICKOFF_S: 1,   // vs the Matcha Bot: 1 goal wins, goals 14 and fixed, bot x2.6 (rev 8)
-  LEVEL_MIN: .5, LEVEL_MAX: 1.5, KEEPER_STUN_S: .25,                                     // botLevel scales the hard bot's speed and reactions
+  LEVEL_MIN: .5, LEVEL_MAX: 1.5, KEEPER_STUN_S: .2, KEEPER_WAIT_S: 2,   // rev 6 feel: the Matcha Bot only keeps goal for 2 s after a kick-off
+  SERVE_V: 9, SERVE_SIDE: 3, NEAR_V: 22,                             // the ball rolls to a side at "go"; a post hit above 22/s = near miss                                     // botLevel scales the hard bot's speed and reactions
   ST_COUNT: 0, ST_PLAY: 1, ST_GOAL: 2, ST_DRAW: 3, ST_END: 4, ST_RESET: 5,   // 3 = time up (versus: draw; challenge: the bot wins, w set)
   TEAMS: [{ name: "Matcha", col: "#6fbf4a" }, { name: "Yuzu", col: "#ffd23f" }]
 };
@@ -59,8 +60,10 @@ function outOfCrease(o) {
   }
 }
 function keepOut(o) { clampField(o); outOfCrease(o); }
-const reach = q => RP + RB + (q.bot ? 0 : C.HUMAN_REACH);
+// CTO G1: a human reaches 1.0 further in versus (lag); none in single player (owner wants the Matcha Bot very hard, 12 Nov ~21:50)
+const reach = (m, q) => RP + RB + (q.bot || m.md ? 0 : C.HUMAN_REACH);
 
+// match fields the server may read: st, w, sc, p[i].bot; since = play time since "go"; sv = the team the next serve rolls to
 // {seed, humans:[{team,slot}], cats, size: 1|2|3 (default 3), mode: "versus"|"challenge", goalsToWin (challenge, default 1), botLevel 0.5–1.5}
 function createMatch(o) {
   o = o && typeof o === "object" ? o : {};
@@ -72,7 +75,7 @@ function createMatch(o) {
   const m = { v: 2, size: size, md: md, need: Number.isInteger(o.goalsToWin) && o.goalsToWin >= 1 && o.goalsToWin <= 9 ? o.goalsToWin : C.CHALLENGE_GOALS,
     lvl: isNum(o.botLevel) ? clamp(o.botLevel, C.LEVEL_MIN, C.LEVEL_MAX) : 1, ht: hasH[0] !== hasH[1] ? (hasH[0] ? 0 : 1) : -1,   // ht: the one team with humans
     rs: isNum(o.seed) ? (o.seed >>> 0) | 0 : 0, n: 0, st: C.ST_COUNT, cd: C.COUNT_S, left: C.MATCH_S, gw: md ? C.GW_CH : C.GW0, grew: false,
-    w: -1, sc: [0, 0], after: 0, stuck: 0, lh: -1e6, b: { x: W / 2, y: H / 2, vx: 0, vy: 0 }, p: [] };
+    w: -1, sc: [0, 0], after: 0, stuck: 0, lh: -1e6, since: 0, sv: -1, b: { x: W / 2, y: H / 2, vx: 0, vy: 0 }, p: [] };
   for (let tm = 0; tm < 2; tm++) for (let s = 0; s < size; s++) {
     const x = BASE[size][s][0], y = tm === 0 ? BASE[size][s][1] : H - BASE[size][s][1];
     const h = isH(tm, s) ? 1 : 0;
@@ -139,6 +142,7 @@ function think(m, dt) {
     if (!bots.length) continue;
     if (humBest < best - 3) chaser = null;
     for (const q of bots) if (q !== chaser && (!guard || Math.abs(q.y - ownY) < Math.abs(guard.y - ownY))) guard = q;   // ties: lower slot
+    if (m.md && m.since < C.KEEPER_WAIT_S && chaser && chaser.hard) { if (!guard) guard = chaser; chaser = null; }   // the player gets the first touch
     if (bots.length === 1 && chaser && chaser.hard) {
       // the lone Matcha Bot keeps goal first: it strikes only with the ball on its own side, not rushing at goal, and itself goal-side of it
       const near = Math.abs(b.y - ownY) < H * .42, coming = ownY === 0 ? b.vy < -6 : b.vy > 6, behind = Math.abs(chaser.y - ownY) < Math.abs(b.y - ownY);
@@ -146,7 +150,8 @@ function think(m, dt) {
       if (!near || coming || !behind || !slow || !clear) { guard = chaser; chaser = null; }
     }
     for (const q of bots) {
-      q.think -= dt; q.recover = Math.max(0, q.recover - dt);
+      const was = q.recover; q.think -= dt; q.recover = Math.max(0, q.recover - dt);
+      if (q.hard && was > 0 && q.recover === 0) q.think = 0;   // the Matcha Bot looks again the moment its blink ends (a smooth botLevel dial)
       if (q.think > 0) continue;
       q.think = q.hard ? (.04 + rnd(m) * .03) / m.lvl : .1 + rnd(m) * .08;   // the hard bot looks again 2–3x as often
       if (q.recover > 0) { q.fast = false; q.tx = q.x + (W / 2 - q.x) * .2; q.ty = q.y + (ownY - q.y) * .25; }   // backs off after a hit
@@ -181,8 +186,8 @@ function movePlayers(m, h, slow, ev) {
   const P = m.p;
   for (const q of P) {
     if (!q.bot) { follow(q, q.ix, q.iy, q.ia, h); continue; }
-    // the Matcha Bot runs at 2.6x; botLevel speeds up its striking only (a faster keeper overshoots its line and saves less)
-    const max = (q.fast ? C.BOT_FAST : (q.role === "guard" ? C.BOT_GUARD : C.BOT_SUPPORT)) * (q.hard ? C.HARD * (q.role === "guard" ? 1 : m.lvl) : 1);
+    // the Matcha Bot runs at 2.6x; botLevel changes its reactions, not its speed (faster overshoots its line or knocks in own goals)
+    const max = (q.fast ? C.BOT_FAST : (q.role === "guard" ? C.BOT_GUARD : C.BOT_SUPPORT)) * (q.hard ? C.HARD : 1);
     const dx = q.tx - q.x, dy = q.ty - q.y, d = Math.hypot(dx, dy), sp = Math.min(max, d * 8);
     const vx = d > .01 ? dx / d * sp : 0, vy = d > .01 ? dy / d * sp : 0, k = Math.min(1, h * 10);
     q.vx += (vx - q.vx) * k; q.vy += (vy - q.vy) * k;
@@ -198,7 +203,7 @@ function movePlayers(m, h, slow, ev) {
   for (let i = order.length - 1; i > 0; i--) { const j = Math.floor(rnd(m) * (i + 1)), t = order[i]; order[i] = order[j]; order[j] = t; }   // random order: no team wins a 50/50 by list order
   const touching = [], hits = [];
   for (const q of order) {
-    const R = reach(q);   // a human reaches 1.0 further (CTO G1: makes up for the phone seeing the ball late)
+    const R = reach(m, q);
     let dx = b.x - q.x, dy = b.y - q.y; const d = Math.hypot(dx, dy);
     if (!(d < R && d > 0)) continue;
     touching.push(q);
@@ -227,7 +232,7 @@ function movePlayers(m, h, slow, ev) {
     b.vx = px * C.SQUEEZE_V; b.vy = py * C.SQUEEZE_V; b.x += px * .8; b.y += py * .8;
     // the squeezers are shoved off the ball so the pop has room (two players 6.5 apart left no gap: rev 2 jittered up to 14,000 hits a match)
     for (const q of touching) {
-      let dx = q.x - b.x, dy = q.y - b.y; const d = Math.hypot(dx, dy) || 1, R = reach(q) + .3;
+      let dx = q.x - b.x, dy = q.y - b.y; const d = Math.hypot(dx, dy) || 1, R = reach(m, q) + .3;
       if (d < R) { q.x = b.x + dx / d * R; q.y = b.y + dy / d * R; keepOut(q); }
     }
     return;   // a squeeze is not a shot: no hit events, no bot back-off
@@ -236,8 +241,8 @@ function movePlayers(m, h, slow, ev) {
     const q = h[0];
     // at most one hit event per 0.12 s a match (≤ 500): a 2 v 2 face-off ping-pongs ~12 real bounces a second; the physics is unchanged
     if (m.n - m.lh >= Math.round(C.HIT_GAP_S / C.DT)) { m.lh = m.n; ev.push({ k: "hit", team: q.team, slot: q.slot, p: r2(Math.min(1, h[1] / C.HIT_FULL)) }); }
-    // a striker backs off after a hit; the Matcha Bot's keeper stays on its line after a save, and blinks only below botLevel 1 (easier)
-    if (q.bot) q.recover = q.hard && q.role === "guard" ? C.KEEPER_STUN_S * Math.max(0, 1 / (m.lvl * m.lvl) - 1) : C.BOT_RECOVER_S;
+    // a striker backs off after a hit; the Matcha Bot's keeper only blinks after a save (shorter at a higher botLevel): the player's chance
+    if (q.bot) q.recover = q.hard && q.role === "guard" ? C.KEEPER_STUN_S / (m.lvl * m.lvl) : C.BOT_RECOVER_S;
   }
 }
 
@@ -259,9 +264,16 @@ function moveBall(m, h, ev) {
 // versus: the first goal wins. Challenge: the human team wins at goalsToWin; any other goal = 1.5 s cheer, then a fresh kick-off
 function onGoal(m, w, ev) {
   m.sc[w]++;
+  if (m.sv >= 0) m.sv = 1 - m.sv;
   ev.push({ k: "goal", w: w, sc: m.sc.slice() });
   if (!m.md || (m.sc[w] >= m.need && (m.ht < 0 || w === m.ht))) { m.st = C.ST_GOAL; m.w = w; }
   else { m.st = C.ST_RESET; m.after = 0; }
+}
+// rev 6 feel: at "go" the ball rolls gently toward one team's half: the player in a challenge, else a random side, then alternating
+function serve(m) {
+  if (m.md && m.ht >= 0) m.sv = m.ht;
+  else if (m.sv < 0) m.sv = rnd(m) < .5 ? 0 : 1;
+  m.b.vx = (rnd(m) - .5) * C.SERVE_SIDE; m.b.vy = m.sv === 0 ? C.SERVE_V : -C.SERVE_V;   // team 0's half is the bottom (y > H/2)
 }
 function kickoff(m, ev) {   // everyone back to their start spots, ball to the centre, 1 s countdown; the clock waits
   for (const q of m.p) { q.x = q.tx = q.hx; q.y = q.ty = q.hy; q.vx = q.vy = 0; q.recover = 0; q.fast = false; }
@@ -292,7 +304,8 @@ function ballPhysics(b, h, gw, ev) {
     let dx = b.x - px, dy = b.y - py; const d = Math.hypot(dx, dy), R = RB + C.POST;
     if (d < R && d > 0) {
       dx /= d; dy /= d; b.x = px + dx * R; b.y = py + dy * R;
-      const r = b.vx * dx + b.vy * dy; if (r < 0) { b.vx -= (1 + C.POST_E) * r * dx; b.vy -= (1 + C.POST_E) * r * dy; ev.push({ k: "post" }); }
+      const r = b.vx * dx + b.vy * dy;
+      if (r < 0) { const near = Math.hypot(b.vx, b.vy) > C.NEAR_V; b.vx -= (1 + C.POST_E) * r * dx; b.vy -= (1 + C.POST_E) * r * dy; ev.push(near ? { k: "post", near: 1 } : { k: "post" }); }
     }
   }
   if (b.y < 0 || b.y > H) {   // in the net
@@ -323,7 +336,7 @@ function step(m, dt) {
   if (m.st === C.ST_END) return ev;
   if (m.st === C.ST_COUNT) {
     m.cd -= dt;
-    if (m.cd <= 1e-9) { m.cd = 0; m.st = C.ST_PLAY; ev.push({ k: "go" }); }
+    if (m.cd <= 1e-9) { m.cd = 0; m.st = C.ST_PLAY; m.since = 0; serve(m); ev.push({ k: "go" }); }
     return ev;
   }
   if (m.st === C.ST_RESET) {   // challenge goal that doesn't end it: a short cheer at 0.3 speed, then the kick-off
@@ -344,7 +357,7 @@ function step(m, dt) {
     }
     return ev;
   }
-  m.left -= dt;
+  m.left -= dt; m.since += dt;
   if (!m.md) {   // versus goals grow 28 → 40 from 15 s left; the challenge's goals stay 16
     if (m.left <= C.GROW_AT_S + 1e-9 && !m.grew) { m.grew = true; ev.push({ k: "grow" }); }
     if (m.grew) m.gw = Math.min(C.GW1, m.gw + dt * C.GROW_PER_S);

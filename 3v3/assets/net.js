@@ -33,7 +33,8 @@ const Net = (() => {
       this.rtt = this.have ? this.rtt * 0.7 + rtt * 0.3 : rtt; this.have = true;
     },
     hint(serverNow){ if (!this.have && typeof serverNow === "number") this.offset = serverNow - Date.now(); },   // before the first pong
-    now(){ return Date.now() + this.offset; } };
+    now(){ return Date.now() + this.offset; },
+    rttMin(){ return this.samples.length ? this.samples.reduce((a, b) => b.rtt < a ? b.rtt : a, Infinity) : this.rtt; } };   // the line's best round trip
 
   /* HTTP: POST JSON with a timeout; the fake server answers in the page */
   async function post(path, body, ms){

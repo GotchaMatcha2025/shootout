@@ -1,7 +1,8 @@
 /* Gotcha Shootout 3v3 — a server inside the page, speaking the real messages (API-3V3.md §3, §10) with Sim3. Two jobs:
    1. ?api=fake: test and demo with no network (solo vs the Matcha Bot, rooms filled by fake friends, error codes, drops).
    2. Plan B (§8): when the real-time server can't be reached, single player runs here and only the code comes from POST /solo.
-   Test codes for ?api=fake: join NNNN → "no-room", FFFF → "room-full", XXXX → "started"; any other code joins a room (?size=2 for 2 v 2). */
+   Test codes for ?api=fake: join NNNN → "no-room", FFFF → "room-full", XXXX → "started"; 7777 = the booth game (1 v 1, starts by itself;
+   ?lonely=1: nobody comes → lonely:1); any other code joins a friend's room (?size=2 for 2 v 2). */
 "use strict";
 const Fake = (() => {
   const Q = new URLSearchParams(location.search), FAKE = Net.mode === "fake";
@@ -9,7 +10,8 @@ const Fake = (() => {
   const SKEW = FAKE ? 2345 : 0;                                        // a wrong phone clock on purpose: the countdowns must still be right
   const FRIENDS = Q.get("friends") !== "0", SOLO_SIZE = +(Q.get("solo") || 1) === 3 ? 3 : 1;
   const PRIZE = Q.get("prize") === "1" ? { win: "TEST FREE MATCHA", lose: "TEST $1 OFF", draw: "TEST $1 OFF" } : null;   // ?prize=1: labels as staging TEST
-  const WHY = Q.get("why");   // ?why=used|hours|offline|cap|none: no prize, for this reason
+  const WHY = Q.get("why");
+  let busyLeft = +(Q.get("busy") || 0);   // ?busy=N: the first N asks (solo / create / join) answer "busy"   // ?why=used|hours|offline|cap|none: no prize, for this reason
   const need = () => (globalThis.Sim3 && Sim3.C.CHALLENGE_GOALS) || 1;   // one goal beats the Matcha Bot (owner 12 Nov ~20:34, §11)
   const ABC = "ACDEFHJKMNPQRTUVWXY34679", now = () => Date.now() + SKEW, S = () => globalThis.Sim3;
   const code = n => { let c = ""; for (let i = 0; i < n; i++) c += ABC[Math.floor(Math.random() * ABC.length)]; return c; };
@@ -17,13 +19,20 @@ const Fake = (() => {
   let sock = null, dev = null, refuse = 0, closed = false, room = null, match = null, lastEnd = null, acked = null, qT = 0;
   const results = [], stats = { goals: 0, beaten: 0 };   // this fake's own counts (the LED ticker shows only real counts)
 
-  // deliver in order, LAG ms later (+ a little jitter), like one 4G socket
-  function later(fn){ const t = Math.max(qT, Date.now() + LAG + Math.random() * (LAG ? 15 : 0)); qT = t; setTimeout(fn, t - Date.now()); }
-  function out(o){ const s = sock; if (!s) return; const txt = JSON.stringify(o); later(() => { if (s.readyState === 1 && s.onmessage) s.onmessage({ data: txt }); }); }
+  // a 4G-like line, in order per direction: ?rtt= (ms, both ways together; default 2×LAG), ?jitter= (ms, one way), ?gaps=1 (now and then
+  // the line stalls 500 ms, then everything arrives at once). Down = server → phone, up = phone → server.
+  const RTT = +(Q.get("rtt") || 2 * LAG), JIT = +(Q.get("jitter") || (LAG ? 15 : 0)), GAPS = Q.get("gaps") === "1";
+  const qq = { down: 0, up: 0 }; let gapUntil = 0, nextGap = Date.now() + 2500;
+  function later(fn, dir){
+    const n = Date.now(); dir = dir || "down";
+    if (GAPS && n > nextGap){ gapUntil = n + 500; nextGap = n + 2500 + Math.random() * 3000; }
+    const t = Math.max(qq[dir], n + RTT / 2 + Math.random() * JIT, gapUntil); qq[dir] = t; setTimeout(fn, t - n);
+  }
+  function out(o){ const s = sock; if (!s) return; const txt = JSON.stringify(o); later(() => { if (s.readyState === 1 && s.onmessage) s.onmessage({ data: txt }); }, "down"); }
   function socket(d){
     dev = d;
     const s = { readyState: 0, onopen: null, onmessage: null, onclose: null, onerror: null,
-      send(txt){ if (s.readyState !== 1) throw new Error("closed"); later(() => { if (sock === s) recv(JSON.parse(txt)); }); },
+      send(txt){ if (s.readyState !== 1) throw new Error("closed"); later(() => { if (sock === s) recv(JSON.parse(txt)); }, "up"); },
       close(){ if (s.readyState === 3) return; s.readyState = 3; if (sock === s){ sock = null; gone(); } setTimeout(() => s.onclose && s.onclose({}), 0); } };
     setTimeout(() => {
       if (s.readyState !== 0) return;
@@ -66,18 +75,28 @@ const Fake = (() => {
     }, 1400 * (i + 1)));
   }
   // full room: the game maker taps Start (§12.2); a fake host who made the room taps it 1.5 s later
-  function checkFull(){ if (room && !room.k && !free().length && !room.makerMe){ const id = room.code; setTimeout(() => { if (room && room.code === id) go(); }, 1500); } }
-  function go(){
-    if (!room || room.k || free().length) return;
-    room.k = now() + 5000; out(roomMsg()); const id = room.code;
-    room.timer = setTimeout(() => { if (room && room.code === id && room.k) startMatch(false); }, 5000);
+  function checkFull(){ if (room && room.booth && !room.k && !free().length){ go(3000); return; }   // the booth game starts by itself in 3 s (§14)
+    if (room && !room.k && !free().length && !room.makerMe){ const id = room.code; setTimeout(() => { if (room && room.code === id) go(); }, 1500); } }
+  function go(ms){
+    if (!room || room.k || free().length) return; ms = ms || 5000;
+    room.k = now() + ms; out(roomMsg()); const id = room.code;
+    room.timer = setTimeout(() => { if (room && room.code === id && room.k) startMatch(false); }, ms);
+  }
+  const BOOTH = "7777";
+  function boothRoom(cat){   // the open booth room: you on Matcha, the other seat waits for someone at the booth
+    room = { code: BOOTH, size: 1, seats: [[{ cat, h: 1, me: 1 }], [null]], you: { team: 0, slot: 0 }, k: null, rm: {}, timer: 0, used: false, makerMe: false, booth: true, lonely: 0 };
+    out(roomMsg());
+    setTimeout(() => { if (!room || !room.booth || room.k || !free().length) return;
+      if (Q.get("lonely") === "1"){ room.lonely = 1; out(roomMsg()); }   // (the real server says so after 60 s alone)
+      else if (FRIENDS){ room.seats[1][0] = { cat: (cat + 2) % 4, h: 1, f: 1 }; out(roomMsg()); checkFull(); } }, 1500);
   }
   function roomMsg(){
     const seats = room.seats.map(col => col.map(s => {
       if (!s) return null; const o = { cat: s.cat, h: 1 };
       if (s.me){ o.me = 1; if (room.makerMe) o.mk = 1; if (room.after && room.rm.me) o.rm = 1; } else { if (s.mk) o.mk = 1; if (room.after && room.rm.f) o.rm = 1; }
       return o; }));
-    return { t: "room", code: room.code, size: room.size, seats, you: room.you, k: room.k, now: now(), after: room.after ? 1 : 0 };
+    const o = { t: "room", code: room.code, size: room.size, seats, you: room.you, k: room.k, now: now(), after: room.after ? 1 : 0 };
+    if (room.booth) o.booth = true; if (room.lonely) o.lonely = 1; return o;
   }
 
   /* matches: solo = the challenge vs the hard bot (§7/§8); a room = versus */
@@ -88,13 +107,15 @@ const Fake = (() => {
     else { size = room.size; you = room.you; md = 0; cats = room.seats.map(col => col.map(s => s.cat)); bots = room.seats.map(col => col.map(() => 0));
       room.k = null; room.rm = {}; room.used = true; room.after = 0; }
     const seed = Math.floor(Math.random() * 2147483647);
-    const m = S().createMatch({ seed, humans: [you], cats, size, mode: md ? "challenge" : "versus", goalsToWin: need() });
+    // multiplayer: first to VS_GOALS in VS_SECS (owner ~22:54; ?vsgoals= / ?vssecs= for quick tests), as the server passes them
+    const vsNeed = +(Q.get("vsgoals") || 3), vsSecs = +(Q.get("vssecs") || 120);
+    const m = S().createMatch(md ? { seed, humans: [you], cats, size, mode: "challenge", goalsToWin: need() } : { seed, humans: [you], cats, size, mode: "versus", goalsToWin: vsNeed, matchSecs: vsSecs });
     // the fake friends are played by the sim's bots, but they are people on the phone (bots = 0)
-    match = { id: "F" + code(7), m, you, size, md, cats, bots, seed, at: now(), ack: 0, solo, bot: false, goneAt: 0, acc: 0, lastT: Date.now(), t0: Date.now() };
+    match = { id: "F" + code(7), m, you, size, md, cats, bots, seed, at: now(), need: md ? need() : vsNeed, secs: md ? S().C.MATCH_S : vsSecs, ack: 0, solo, bot: false, goneAt: 0, acc: 0, lastT: Date.now(), t0: Date.now() };
     out(startMsg());
     match.tick = setInterval(tick, 1000 / 30);
   }
-  function startMsg(){ const M = match; return { t: "start", id: M.id, seed: M.seed, you: M.you, cats: M.cats, bots: M.bots, at: M.at, md: M.md, need: M.md ? need() : undefined, size: M.size }; }
+  function startMsg(){ const M = match; return { t: "start", id: M.id, seed: M.seed, you: M.you, cats: M.cats, bots: M.bots, at: M.at, md: M.md, need: M.need, secs: M.secs, size: M.size }; }
   function tick(){
     const M = match; if (!M) return;
     const t = Date.now(); M.acc = Math.min(M.acc + (t - M.lastT) / 1000, 4 / 60); M.lastT = t;   // real elapsed time, at most 4 steps a tick
@@ -130,6 +151,7 @@ const Fake = (() => {
 
   function recv(m){
     if (!m || typeof m !== "object") return;
+    if ((m.t === "hello" || m.t === "create" || m.t === "join") && busyLeft > 0 && !match){ busyLeft--; out({ t: "err", m: "busy" }); return; }
     switch (m.t){
       case "ping": out({ t: "pong", c: m.c, s: now() }); break;
       case "in": nIn++; lastIn = m; if (match && !match.bot && Number.isInteger(m.s) && m.s > match.ack){ match.ack = m.s; S().setInput(match.m, match.you.team, match.you.slot, m); } break;
@@ -144,6 +166,7 @@ const Fake = (() => {
       case "join": {
         if (closed){ out({ t: "err", m: "closed" }); break; }
         const c = String(m.code || "").toUpperCase();
+        if (c === BOOTH){ boothRoom(m.cat | 0); break; }
         if (c === "FFFF") out({ t: "err", m: "room-full" });
         else if (c === "XXXX") out({ t: "err", m: "started" });
         else if (c.length !== 4 || c === "NNNN" || [...c].some(ch => ABC.indexOf(ch) < 0)) out({ t: "err", m: "no-room" });
@@ -164,7 +187,7 @@ const Fake = (() => {
 
   async function post(path, body){
     await new Promise(r => setTimeout(r, LAG * 2));
-    if (path === "/") return { ok: true, v: "fake", closed, solo: null, need: need(), goals: stats.goals, beaten: stats.beaten, status: 200 };
+    if (path === "/") return { ok: true, v: "fake", closed, solo: Q.get("sololocal") === "1" ? "local" : null, need: need(), goals: stats.goals, beaten: stats.beaten, status: 200 };
     if (path === "/result"){
       const r = body && body.code ? results.find(x => x.code === body.code) : results[results.length - 1];
       return r ? { ok: true, id: r.id, r: r.r, at: r.at, prize: r.prize, used: r.used, code: r.code, exp: r.exp, why: r.why, md: r.md, status: 200 } : { ok: false, e: "not-found", status: 404 };

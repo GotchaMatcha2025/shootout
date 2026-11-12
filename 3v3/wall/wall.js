@@ -13,7 +13,14 @@ var WallCore = (function () {
     if (BASES[saved]) return saved;
     return proto === "file:" || /^(localhost|127\.0\.0\.1)$/.test(host) ? "staging" : "live";
   }
-  function wsUrl(base) { return base.replace(/^http/, "ws") + "/ws?role=wall"; }
+  // the socket address; a wall key (server secret WALL_KEY) rides along as &k= only when there is one
+  function wsUrl(base, key) { return base.replace(/^http/, "ws") + "/ws?role=wall" + (key ? "&k=" + encodeURIComponent(key) : ""); }
+  // the wall key: ?k= in this page's address wins (and is kept on the TV), else the kept one; junk is ignored
+  var KEY_RE = /^[A-Za-z0-9._~-]{1,200}$/;
+  function pickKey(fromUrl, kept) { return fromUrl && KEY_RE.test(fromUrl) ? fromUrl : kept && KEY_RE.test(kept) ? kept : null; }
+  function urlKey(search) { var m = /[?&]k=([^&#]*)/.exec(search || ""); if (!m) return null; try { return decodeURIComponent(m[1]); } catch (e) { return null; } }
+  // the address without k=, so the key never shows in the TV's address bar
+  function stripKey(search) { var s = (search || "").replace(/^\?/, "").split("&").filter(function (x) { return x && !/^k=/.test(x); }).join("&"); return s ? "?" + s : ""; }
   // reconnect forever: 0.5 s, 1 s, 2 s … capped at 10 s, ±25% so a room of walls doesn't knock at once
   function backoff(n, r) { return Math.round(Math.min(10000, 500 * Math.pow(2, Math.min(n, 5))) * (0.75 + 0.5 * r)); }
   function isSolo(md) { return md === 1 || md === "challenge" || md === "solo"; }
@@ -34,13 +41,29 @@ var WallCore = (function () {
   }
   // what the wall shouts when the drawn score changes or time runs out. Versus: first goal wins. Single player: the human team wins at the
   // server's `need` (or when the server ends the match on that goal, st 2); the bot's goals only restart play
+  // Multiplayer (owner 12 Nov ~22:54): first to the server's `need` (3), a new kick-off after each goal; the deciding goal (or the server
+  // ending the match on it, st 2) = "MATCHA WINS" over the score, winner's goals first
+  function score(sc, w) { return sc ? sc[w] + "–" + sc[1 - w] : ""; }
   function goalText(md, w, sc, humanTeam, need, ended) {
-    if (!isSolo(md)) return { text: "GOAL! TEAM " + TEAM[w], party: true, end: true };
+    if (!isSolo(md)) {
+      if (ended || (need && sc && sc[w] >= need)) return { text: TEAM[w] + " WINS", sub: score(sc, w), party: true, end: true };
+      return { text: "GOAL! TEAM " + TEAM[w], party: true, end: false };
+    }
     if (w !== humanTeam) return { text: "MATCHA BOT SCORES", party: false, end: false };
     if (ended || (need && sc && sc[w] >= need)) return { text: "GOAL! BOT BEATEN", party: true, end: true };
     return { text: "GOAL!", party: true, end: false };
   }
-  function timeUpText(md) { return isSolo(md) ? { text: "MATCHA BOT WINS", party: false, end: true } : { text: "DRAW", party: false, end: true }; }
+  // time up: single player = the bot wins; multiplayer = the team ahead wins, level = a draw (2-minute cap)
+  function timeUpText(md, sc) {
+    if (isSolo(md)) return { text: "MATCHA BOT WINS", party: false, end: true };
+    if (sc && sc[0] !== sc[1]) { var w = sc[0] > sc[1] ? 0 : 1; return { text: TEAM[w] + " WINS", sub: score(sc, w), party: true, end: true, w: w }; }
+    return { text: "DRAW", sub: sc ? score(sc, 0) : "", party: false, end: true };
+  }
+  // the match clock: plain seconds for a 60 s match (as approved), m:ss for a longer one (the server's `secs`)
+  function clockText(tlMs, secs) {
+    var s = Math.max(0, Math.ceil(tlMs / 1000));
+    return secs > 60 ? Math.floor(s / 60) + ":" + (s % 60 < 10 ? "0" : "") + (s % 60) : String(s);
+  }
   // BOT label: the snapshot's `bt` bitmask wins (bit team*size+slot; it also marks a bot holding a dropped player's seat), else start's bots
   function isBot(i, size, bt, bots) {
     if (typeof bt === "number") return (bt & (1 << i)) !== 0;
@@ -94,9 +117,17 @@ var WallCore = (function () {
     }
     return null;
   }
+  // the booth game panel (§14, owner yes rev 9 ~22:28): only a well-formed booth code is shown (the server never sends friends' codes)
+  var CODE4 = /^[ACDEFHJKMNPQRTUVWXY34679]{4}$/;
+  function boothView(b) {
+    if (!b || typeof b.code !== "string" || !CODE4.test(b.code)) return null;
+    return { code: b.code, waiting: b.n === 1 ? "1 waiting" : "" };
+  }
+  // what the QR opens: the phone page with the code filled in (a test server adds its api=, as the phone page reads it)
+  function boothUrl(code, mode) { return "https://gotchamatcha2025.github.io/shootout/3v3/?join=" + encodeURIComponent(code) + (mode && mode !== "live" ? "&api=" + mode : ""); }
   // "GOAL! TEAM MATCHA" → the hand-drawn "GOAL!" + the line under it
   function splitCheer(t) { var i = t.indexOf("! "); return i > 0 ? { big: t.slice(0, i + 1), sub: t.slice(i + 2) } : { big: t, sub: "" }; }
-  return { TEAM: TEAM, BASES: BASES, countsLine: countsLine, flashOk: flashOk, playClock: playClock, goalAhead: goalAhead, splitCheer: splitCheer, pickMode: pickMode, wsUrl: wsUrl, backoff: backoff, isSolo: isSolo, modeLabel: modeLabel,
+  return { TEAM: TEAM, BASES: BASES, countsLine: countsLine, flashOk: flashOk, playClock: playClock, goalAhead: goalAhead, splitCheer: splitCheer, clockText: clockText, boothView: boothView, boothUrl: boothUrl, pickMode: pickMode, wsUrl: wsUrl, pickKey: pickKey, urlKey: urlKey, stripKey: stripKey, backoff: backoff, isSolo: isSolo, modeLabel: modeLabel,
     sample: sample, goalText: goalText, isBot: isBot, sameMatch: sameMatch, snapKind: snapKind, timeUpText: timeUpText, scorer: scorer };
 })();
 if (typeof module === "object" && module.exports) module.exports = WallCore;
@@ -110,10 +141,10 @@ if (typeof window !== "undefined" && window.document) (function () {
   var CATS = [{ f: "cat-ok-gotcha-cream.webp", cx: 305, cy: 284, r: 132 }, { f: "cat-barista-cream.webp", cx: 326, cy: 309, r: 128 },
     { f: "cat-whisk-ride-cream.webp", cx: 450, cy: 80, r: 84 }, { f: "matcha-deprived-cream.webp", cx: 300, cy: 240, r: 150 }];
   var DEMO_CATS = [[0, 1, 2], [3, 2, 0]], DEMO_SIZE = 2;   // rev 3 demo: 2 v 2, cats [[0,1],[3,2]]
-  // images: the 3v3 assets folder first, then the repo's shared one (whichever exists after the switch)
+  // images: the repo's shared folder (where they are), then the 3v3 assets folder in case they move there
   CATS.forEach(function (c) {
-    c.img = new Image(); c.img.onerror = function () { if (!c.tried) { c.tried = 1; c.img.src = "../../assets/img/" + c.f; } };
-    c.img.src = "../assets/img/" + c.f;
+    c.img = new Image(); c.img.onerror = function () { if (!c.tried) { c.tried = 1; c.img.src = "../assets/img/" + c.f; } };
+    c.img.src = "../../assets/img/" + c.f;
   });
 
   var mode, base, qs = "";
@@ -123,14 +154,20 @@ if (typeof window !== "undefined" && window.document) (function () {
   mode = WC.pickMode(asked, saved, location.hostname, location.protocol);
   try { if (asked && WC.BASES[asked]) sessionStorage.setItem("s3v3:api", asked); } catch (e) { /* no session storage */ }
   base = WC.BASES[mode];
-  if (mode === "fake") { var fs = document.createElement("script"); fs.src = "fake.js?v=2"; document.head.appendChild(fs); }
+  if (mode === "fake") { var fs = document.createElement("script"); fs.src = "fake.js?v=4"; document.head.appendChild(fs); }
+  // wall key: kept per server on this TV, so a reload without ?k= still connects; taken out of the address bar at once
+  var KEYK = "s3v3:" + (mode === "live" ? "" : mode === "staging" ? "stg:" : mode + ":") + "wallkey", kept = null, fromUrl = WC.urlKey(qs), wallKey;
+  try { kept = localStorage.getItem(KEYK); } catch (e) { kept = null; }
+  wallKey = WC.pickKey(fromUrl, kept);
+  if (fromUrl && wallKey === fromUrl) { try { localStorage.setItem(KEYK, wallKey); } catch (e) { /* memory only */ } }
+  if (fromUrl != null) { try { history.replaceState(null, "", location.pathname + WC.stripKey(qs) + location.hash); } catch (e) { /* old browser: the key stays in the address */ } }
 
   /* ---------- state ---------- */
   var S = { online: false, closed: false, F: null, demo: null, demoAcc: 0, prevSc: null, prevSt: -1, cel: null, trail: [], soundOn: false,
-    counts: null, lite: false, pt: null, hypeUntil: 0, hypeTeam: -1, goalFlash: 0, white: false, storm: 0, soft: 0, flashAt: 0 };
+    counts: null, booth: null, lite: false, pt: null, hypeUntil: 0, hypeTeam: -1, goalFlash: 0, white: false, storm: 0, soft: 0, flashAt: 0 };
   if (mode === "fake") window.__wall = S;   // tests read the state on the fake feed only
   function newFeatured(m) {
-    return { id: m && m.id || null, md: m && m.md != null ? m.md : null, need: m && typeof m.need === "number" ? m.need : null, cats: m && m.cats || null, bots: m && m.bots || null,
+    return { id: m && m.id || null, md: m && m.md != null ? m.md : null, need: m && typeof m.need === "number" ? m.need : null, secs: m && typeof m.secs === "number" ? m.secs : null, cats: m && m.cats || null, bots: m && m.bots || null,
       human: humanTeam(m), buf: [], lastAt: 0, endAt: 0, done: false };
   }
   // the team with people on it (single player is always Team Matcha; the bots array says it when the server sends it)
@@ -146,7 +183,7 @@ if (typeof window !== "undefined" && window.document) (function () {
     clearTimeout(timer);
     var Sock = mode === "fake" ? window.FakeSocket : window.WebSocket;
     if (!Sock) { if (mode === "fake") timer = setTimeout(connect, 300); return; }   // fake.js still loading; no WebSocket at all = demo only
-    try { ws = new Sock(WC.wsUrl(base)); } catch (e) { ws = null; retry(); return; }
+    try { ws = new Sock(WC.wsUrl(base, wallKey)); } catch (e) { ws = null; retry(); return; }
     var me = ws;
     ws.onopen = function () { if (me !== ws) return; lastMsg = Date.now(); };
     ws.onmessage = function (e) {
@@ -166,10 +203,10 @@ if (typeof window !== "undefined" && window.document) (function () {
 
   function onMsg(m) {
     var now = performance.now();
-    if (m.t === "wall") { if (m.closed != null) S.closed = !!m.closed; S.counts = m; return; }   // the heartbeat (+ today's counts); GET / is the closed switch's main source
+    if (m.t === "wall") { if (m.closed != null) S.closed = !!m.closed; S.counts = m; S.booth = WC.boothView(m.booth); return; }   // the heartbeat (+ today's counts); GET / is the closed switch's main source
     if (m.t === "start") {
       // the server holds the featured match until it ends (review #7); the same match again only refreshes its seats
-      if (WC.sameMatch(S.F, m)) { if (m.cats) S.F.cats = m.cats; if (m.bots) S.F.bots = m.bots; if (m.md != null) S.F.md = m.md; if (typeof m.need === "number") S.F.need = m.need; return; }
+      if (WC.sameMatch(S.F, m)) { if (m.cats) S.F.cats = m.cats; if (m.bots) S.F.bots = m.bots; if (m.md != null) S.F.md = m.md; if (typeof m.need === "number") S.F.need = m.need; if (typeof m.secs === "number") S.F.secs = m.secs; return; }
       S.F = newFeatured(m); S.F.lastAt = now; S.prevSc = null; S.prevSt = -1; S.cel = null; S.trail = []; return;
     }
     if (m.t === "s") {
@@ -481,26 +518,68 @@ if (typeof window !== "undefined" && window.document) (function () {
     if (S.soft > 0 && !REDUCED) { g.fillStyle = "rgba(255,255,255,.13)"; g.fillRect(0, 0, CW, CH); }
     var fs = CH * 0.055, big = "400 " + Math.round(fs * 1.15) + "px 'Bowlby One', Impact, sans-serif", body = "900 " + Math.round(fs) + "px Nunito, sans-serif";
     // scoreboard: team names (or Player / Matcha Bot), the score when live, the clock in the middle
-    var solo = info.live && WC.isSolo(info.md), sc = info.live && v.sc ? v.sc : null, gap = CH * 0.12;
-    var left = solo ? "PLAYER" : "TEAM MATCHA", right = solo ? "MATCHA BOT" : "TEAM YUZU";
-    if (sc) { left += "  " + sc[0]; right = sc[1] + "  " + right; }
-    text(left, CW / 2 - gap, CH * 0.075, body, COL[0].f, "right");
-    text(right, CW / 2 + gap, CH * 0.075, body, COL[1].f, "left");
-    var first = v.st === 0 && v.tl >= 59950;
-    text(first ? "–" : String(Math.ceil(v.tl / 1000)), CW / 2, CH * 0.078, big, "#fffbe6", "center");
+    var solo = info.live && WC.isSolo(info.md), sc = info.live && v.sc ? v.sc : null, secs = info.secs || 60;
+    var first = v.st === 0 && v.tl >= secs * 1000 - 50, clock = first ? "–" : WC.clockText(v.tl, secs);
+    if (sc) {   // a live match: the running score big ("MATCHA 2 – 1 YUZU"), the clock under it
+      var gapS = CH * 0.14;
+      text(solo ? "PLAYER" : "MATCHA", CW / 2 - gapS, CH * 0.06, body, COL[0].f, "right");
+      text(solo ? "MATCHA BOT" : "YUZU", CW / 2 + gapS, CH * 0.06, body, COL[1].f, "left");
+      text(sc[0] + " – " + sc[1], CW / 2, CH * 0.063, "400 " + Math.round(fs * 1.3) + "px 'Bowlby One', Impact, sans-serif", "#fffbe6", "center");
+      text(clock, CW / 2, CH * 0.122, "400 " + Math.round(fs * 0.68) + "px 'Bowlby One', Impact, sans-serif", "rgba(255,251,230,.85)", "center");
+    } else {   // the demo (and a server without scores): the approved row, team names either side of the clock
+      text("TEAM MATCHA", CW / 2 - CH * 0.12, CH * 0.075, body, COL[0].f, "right");
+      text("TEAM YUZU", CW / 2 + CH * 0.12, CH * 0.075, body, COL[1].f, "left");
+      text(clock, CW / 2, CH * 0.078, big, "#fffbe6", "center");
+    }
     // bottom strip: LIVE / DEMO, the real counts (hidden when unknown), the call to play (fewest words, owner 12 Nov ~20:52)
     var small = "900 " + Math.round(fs * 0.48) + "px Nunito, sans-serif", y = CH * 0.967, counts = WC.countsLine(S.counts);
     g.fillStyle = info.live ? "#ff6b5b" : "#9db5a3"; g.beginPath(); g.arc(CH * 0.04, y, CH * 0.011, 0, 7); g.fill();
     text(info.live ? "LIVE · " + WC.modeLabel(info.md, v.p.length / 2) : "DEMO · BOTS PLAYING", CH * 0.06, y, small, "rgba(255,251,230,.85)", "left");
     if (counts) text(counts, CW / 2, y, small, "rgba(255,251,230,.85)", "center");
     text(S.closed ? "BACK SOON" : "📱 SCAN TO PLAY", CW - CH * 0.04, y, "900 " + Math.round(fs * 0.62) + "px Nunito, sans-serif", "#ffd23f", "right");
+    if (S.booth && S.online && !S.closed) drawBooth(S.booth);
     if (S.cel && S.cel.text) {   // the GOAL banner: the hand-drawn word, the team under it
-      var sp = WC.splitCheer(S.cel.text), hs = Math.round(fs * (sp.big.length > 8 ? 2.2 : 3.6));
+      var sp = S.cel.sub != null ? { big: S.cel.text, sub: S.cel.sub } : WC.splitCheer(S.cel.text), hs = Math.round(fs * (sp.big.length > 8 ? 2.2 : 3.6));
       var hand = "400 " + hs + "px Gotcha, 'Bowlby One', Impact, sans-serif";
       text(sp.big, CW / 2 + 5, CH * 0.5 + 7, hand, "rgba(0,0,0,.6)", "center"); text(sp.big, CW / 2, CH * 0.5, hand, "#fffbe6", "center");
       if (sp.sub) { var sf = "400 " + Math.round(fs * 1.25) + "px 'Bowlby One', Impact, sans-serif"; text(sp.sub, CW / 2 + 3, CH * 0.5 + hs * 0.72 + 4, sf, "rgba(0,0,0,.6)", "center"); text(sp.sub, CW / 2, CH * 0.5 + hs * 0.72, sf, COL[S.cel.w === 1 ? 1 : 0].f, "center"); }
     }
     drawFx(g, dt);
+  }
+
+  /* ---------- the booth game panel (rev 9): JOIN · 1 V 1, the code, a real QR, "1 waiting" ---------- */
+  var qr = { key: "", cv: null };
+  // the QR as its own canvas: whole pixels per module and a 4-module white quiet zone, so a phone camera reads it from across the booth
+  function qrCanvas(text, px) {
+    var key = text + ":" + px;
+    if (qr.key === key) return qr.cv;
+    qr.key = key; qr.cv = null;
+    if (typeof window.qrcode !== "function") return null;
+    try {
+      var q = window.qrcode(0, "M"); q.addData(text); q.make();
+      var n = q.getModuleCount(), quiet = 4, m = Math.max(1, Math.floor(px / (n + 2 * quiet))), size = m * (n + 2 * quiet);
+      var c = document.createElement("canvas"); c.width = c.height = size;
+      var x = c.getContext("2d"); x.fillStyle = "#ffffff"; x.fillRect(0, 0, size, size); x.fillStyle = "#000000";
+      for (var r = 0; r < n; r++) for (var cc = 0; cc < n; cc++) if (q.isDark(r, cc)) x.fillRect((cc + quiet) * m, (r + quiet) * m, m, m);
+      qr.cv = c;
+    } catch (e) { qr.cv = null; }   // no QR rather than a wrong one; the code is still shown
+    return qr.cv;
+  }
+  function roundBox(x, y, w, h, r) { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); }
+  function drawBooth(b) {
+    var pw = CH * 0.3, ph = CH * 0.42, px = CW - pw - CH * 0.03, py = CH * 0.2, cx = px + pw / 2, q = CH * 0.2, qy = py + CH * 0.16;
+    g.setTransform(k, 0, 0, k, 0, 0);
+    g.fillStyle = "rgba(0,0,0,.8)"; g.strokeStyle = "#ffd23f"; g.lineWidth = 6; roundBox(px, py, pw, ph, 30); g.fill(); g.stroke();
+    g.textBaseline = "middle";
+    text("JOIN · 1 V 1", cx, py + CH * 0.045, "900 " + Math.round(CH * 0.035) + "px Nunito, sans-serif", "#ffd23f", "center");
+    text(b.code, cx, py + CH * 0.125, "400 " + Math.round(CH * 0.075) + "px 'Bowlby One', Impact, sans-serif", "#fffbe6", "center");
+    var side = Math.floor(q * k), c = qrCanvas(WC.boothUrl(b.code, mode), side);
+    if (c) {   // drawn 1:1 on the screen's own pixels, no smoothing: crisp modules
+      g.setTransform(1, 0, 0, 1, 0, 0); g.imageSmoothingEnabled = false;
+      g.drawImage(c, Math.round(k * cx - c.width / 2), Math.round(k * qy + (side - c.width) / 2));
+      g.imageSmoothingEnabled = true; g.setTransform(k, 0, 0, k, 0, 0);
+    }
+    if (b.waiting) text(b.waiting, cx, py + ph - CH * 0.03, "900 " + Math.round(CH * 0.032) + "px Nunito, sans-serif", "#fffbe6", "center");
   }
 
   /* ---------- the demo: bots only, run here with sim.js ---------- */
@@ -530,8 +609,8 @@ if (typeof window !== "undefined" && window.document) (function () {
   /* ---------- celebrations follow the DRAWN frame, so they land with the ball ---------- */
   function cheer(c, w) {
     var now = performance.now();
-    S.cel = { text: c.text, w: w, until: c.end ? Infinity : now + 1500 };
-    if (c.party || w >= 0) {   // every goal: whistle, horn, roar; fans jump; one white flash then beams; a flash storm
+    S.cel = { text: c.text, sub: c.sub, w: w, until: c.end ? Infinity : now + 1500 };
+    if (c.party || (w >= 0 && c.text !== "DRAW")) {   // every goal: whistle, horn, roar; fans jump; one white flash then beams; a flash storm
       S.hypeUntil = now + (c.end ? 3200 : 2400); S.hypeTeam = c.end ? -1 : w;
       S.white = WC.flashOk(now, S.flashAt); if (S.white) S.flashAt = now;
       S.goalFlash = 1; S.storm = 1.4;
@@ -544,7 +623,7 @@ if (typeof window !== "undefined" && window.document) (function () {
     var w = WC.scorer(S.prevSc, v.sc);
     if (w >= 0) cheer(WC.goalText(F.md, w, v.sc, F.human, F.need, v.st === 2), w);
     else if (v.st === 2 && S.prevSt === 1 && !v.sc) { var w2 = v.b[1] < H / 2 ? 0 : 1; cheer(WC.goalText(F.md, w2, null, F.human, F.need, true), w2); }   // a server without scores
-    else if (v.st === 3 && S.prevSt !== 3) cheer(WC.timeUpText(F.md), -1);
+    else if (v.st === 3 && S.prevSt !== 3) { var tu = WC.timeUpText(F.md, v.sc); cheer(tu, tu.w != null ? tu.w : -1); }
     if (v.sc) S.prevSc = v.sc.slice();
     S.prevSt = v.st;
   }
@@ -566,7 +645,7 @@ if (typeof window !== "undefined" && window.document) (function () {
         v = WC.sample(F.buf, S.pt);
         if (demoShown) { S.prevSc = v.sc ? v.sc.slice() : null; S.prevSt = v.st; S.trail = []; S.cel = null; demoShown = false; }   // joined mid-match: no stale cheer
         else watch(F, v);
-        info = { live: true, md: F.md, need: F.need, cats: F.cats, bots: F.bots };
+        info = { live: true, md: F.md, need: F.need, secs: F.secs, cats: F.cats, bots: F.bots };
       } else {
         if (!demoShown) { demoShown = true; S.cel = null; S.pt = null; newDemo(); }
         v = demoFrame(dt);

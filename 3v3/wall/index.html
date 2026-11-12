@@ -11,7 +11,7 @@
 <style>
 /* The big screen: one canvas, letterboxed 16:9. Old TV browsers: top/left, no `inset`, no newer CSS. */
 /* the hand-drawn GOAL banner (the website's lettering); a missing file falls back to the next source, then to Bowlby One */
-@font-face{font-family:"Gotcha";src:url(../assets/fonts/gotcha.woff?v=1) format("woff"),url(../../assets/fonts/gotcha.woff?v=1) format("woff");font-display:swap}
+@font-face{font-family:"Gotcha";src:url(../../assets/fonts/gotcha.woff?v=1) format("woff"),url(../assets/fonts/gotcha.woff?v=1) format("woff");font-display:swap}
 html,body{margin:0;height:100%;background:#000;overflow:hidden;color:#fffbe6;font-family:Nunito,"Arial Rounded MT Bold",Arial,sans-serif}
 #wall{position:absolute;top:0;left:0;display:block}
 #ctl{position:fixed;z-index:5;bottom:9%;left:50%;-webkit-transform:translateX(-50%);transform:translateX(-50%);white-space:nowrap;opacity:0;transition:opacity .6s;pointer-events:none}
@@ -31,7 +31,8 @@ html,body{margin:0;height:100%;background:#000;overflow:hidden;color:#fffbe6;fon
 <div id="status"><span id="test" hidden></span><i id="net" aria-hidden="true"></i></div>
 <!-- old TV browsers have no globalThis; sim.js sets globalThis.Sim3 -->
 <script>if (typeof globalThis === "undefined") window.globalThis = window;</script>
-<script src="../assets/sim.js?v=5"></script>
-<script src="wall.js?v=3"></script>
+<script src="../assets/sim.js?v=7"></script>
+<script src="../../assets/vendor/qrcode.min.js?v=1"></script>
+<script src="wall.js?v=7"></script>
 </body>
 </html>

@@ -33,8 +33,14 @@ var StaffCore = (function () {
       var sc = r.sc, me = r.team === 1 ? 1 : 0;
       return "Matcha Bot: " + w + (sc && sc.length === 2 ? " " + sc[me] + "–" + sc[1 - me] : "");
     }
-    if (r.size === 1 || r.size === 2) return r.size + " v " + r.size + ": " + w;
-    return (r.md == null ? "" : "Multiplayer: ") + w;
+    // multiplayer is first to 3 (owner 12 Nov ~22:54): the final score, this player's team first (from `team`, else from the result)
+    var fs = "";
+    if (r.sc && r.sc.length === 2) {
+      var a = r.sc[0], b = r.sc[1], mine = r.team === 0 || r.team === 1 ? r.team : r.r === "win" ? (a >= b ? 0 : 1) : r.r === "lose" ? (a <= b ? 0 : 1) : 0;
+      fs = " " + r.sc[mine] + "–" + r.sc[1 - mine];
+    }
+    if (r.size === 1 || r.size === 2) return r.size + " v " + r.size + ": " + w + fs;
+    return (r.md == null ? "" : "Multiplayer: ") + w + fs;
   }
   // why a code has no prize (the server's `why`): known codes in shop words, anything else shown as sent (short)
   var WHY = { cap: "used today", day: "used today", dev: "used today", phone: "used today", net: "used today", "used-today": "used today",
@@ -129,7 +135,7 @@ if (typeof window !== "undefined" && window.document) (function () {
   var mode = SC.pickMode(asked, saved, location.hostname, location.protocol), base = SC.BASES[mode];
   try { if (asked && SC.BASES[asked]) sessionStorage.setItem("s3v3:api", asked); } catch (e) { /* no session storage */ }
   var KEY = "s3v3:" + (mode === "live" ? "" : mode === "staging" ? "stg:" : mode + ":") + "staff";
-  if (mode === "fake") { var fs = document.createElement("script"); fs.src = "fake.js?v=2"; document.head.appendChild(fs); }
+  if (mode === "fake") { var fs = document.createElement("script"); fs.src = "fake.js?v=3"; document.head.appendChild(fs); }
 
   // one server call: {status, ...json} or {net:true} after `ms` (no answer = never green)
   function post(path, body, ms) {

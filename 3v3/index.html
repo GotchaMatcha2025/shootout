@@ -10,7 +10,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800;900&family=Bowlby+One&display=swap">
-<link rel="stylesheet" href="assets/3v3.css?v=4">
+<link rel="stylesheet" href="assets/3v3.css?v=9">
 </head>
 <body>
 <!-- Screens, ids and words = mock-up rev 4 (owner yes to rev 3 ~20:52 + "fewest words", DECISIONS 12 Nov). The skin lives in 3v3.css only. -->
@@ -48,17 +48,16 @@
   </section>
 
   <section class="scr" id="s-mode" hidden>
+    <form class="coderow" id="joinForm" autocomplete="off">
+      <input class="codein" id="codeIn" maxlength="4" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="CODE" aria-label="Game code">
+      <button class="btn y" id="joinGo" type="submit">Join</button>
+    </form>
+    <p class="err" id="codeErr" role="alert" hidden>Wrong code</p>
     <button class="mode bot" id="mSolo"><span class="mtxt"><b>🤖 VS BOT</b><span id="mSoloSub">1 goal wins</span><i class="heat" aria-label="hardest">🔥🔥🔥🔥🔥</i></span><span class="mart"><img src="../assets/img/cat-ok-gotcha-cream.webp" alt=""></span></button>
     <button class="mode friends" id="mMulti"><span class="mtxt"><b>👥 FRIENDS</b><span id="mMultiSub">1 v 1 · 2 v 2</span></span><span class="mart"><svg class="jersey" viewBox="0 0 64 64" aria-hidden="true"><path d="M10 6 22 2Q32 9 42 2L54 6 64 18 54 26 50 22V62H14V22L10 26 0 18Z" fill="#6fbf4a" stroke="#0b1a10" stroke-width="2.5"/><text x="32" y="48" text-anchor="middle" font-family="Bowlby One, Impact" font-size="22" fill="#0b1a10">7</text></svg><svg class="jersey" viewBox="0 0 64 64" aria-hidden="true"><path d="M10 6 22 2Q32 9 42 2L54 6 64 18 54 26 50 22V62H14V22L10 26 0 18Z" fill="#fff3b0" stroke="#0b1a10" stroke-width="2.5"/><text x="32" y="48" text-anchor="middle" font-family="Bowlby One, Impact" font-size="22" fill="#0b1a10">10</text></svg></span></button>
   </section>
 
   <section class="scr" id="s-multi" hidden>
-    <h2 class="h2">Code</h2>
-    <form class="row" id="joinForm" autocomplete="off">
-      <input class="codein" id="codeIn" maxlength="4" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="CODE" aria-label="Game code">
-      <button class="btn y" id="joinGo" type="submit">Join</button>
-    </form>
-    <p class="err" id="codeErr" role="alert" hidden>Wrong code</p>
     <h2 class="h2">New game</h2>
     <div class="teams">
       <button class="team m" id="n1">1 V 1</button>
@@ -76,12 +75,13 @@
     <div class="spacer"></div>
     <p class="small" id="roomFoot">Tap to swap</p>
     <button class="btn" id="startGo" hidden>▶ Start</button>
+    <button class="btn y" id="vsBot" hidden>🤖 vs Bot</button>
     <button class="btn ghost" id="leaveGo">Leave</button>
   </section>
 
   <section class="scr" id="s-match" hidden>
     <canvas id="pitch" aria-label="Football pitch. Your finger is your player: move it to hit the ball into the goal."></canvas>
-    <div class="hud"><span class="tchip m" id="hudA">MATCHA</span><span class="tchip yz" id="hudB">YUZU</span><span class="clock" id="clock">60</span></div>
+    <div class="hud"><span class="tchip m" id="hudA">MATCHA</span><span class="hscore" id="hudScore" hidden>0 – 0</span><span class="tchip yz" id="hudB">YUZU</span><span class="clock" id="clock">60</span></div>
     <div class="banner" id="banner"></div>
     <div class="hint" id="hint" aria-label="Drag your player"><span class="fing">👆</span> ↑</div>
     <div class="offb" id="offBadge" hidden>Offline · no prize</div>
@@ -131,17 +131,18 @@
     <button class="btn ghost" id="ticketClose" aria-label="Close">✕</button>
   </div>
   <div class="pill" id="pill" hidden>Reconnecting…</div>
+  <div class="pill busy" id="busy" role="status" hidden><i class="spin" aria-hidden="true"></i>Full · 1 sec</div>
   <div class="toast" id="toast" hidden></div>
   <div class="dbg" id="dbg" hidden></div>
   <div class="ribbon" id="ribbon" hidden></div>
 </main>
-<script src="assets/sim.js?v=5"></script>
-<script src="assets/logic.js?v=4"></script>
-<script src="assets/net.js?v=4"></script>
-<script src="assets/fake.js?v=4"></script>
-<script src="assets/draw.js?v=4"></script>
-<script src="assets/sfx.js?v=4"></script>
-<script src="assets/fx.js?v=4"></script>
-<script src="assets/game.js?v=4"></script>
+<script src="assets/sim.js?v=7"></script>
+<script src="assets/logic.js?v=9"></script>
+<script src="assets/net.js?v=8"></script>
+<script src="assets/fake.js?v=9"></script>
+<script src="assets/draw.js?v=5"></script>
+<script src="assets/sfx.js?v=5"></script>
+<script src="assets/fx.js?v=5"></script>
+<script src="assets/game.js?v=10"></script>
 </body>
 </html>

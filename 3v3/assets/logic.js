@@ -65,5 +65,26 @@ const sameMatch = (r, id) => !!(r && r.ok && r.code && id && r.id === id);
 // "The game is resting" after 3 failed connects (CTO §9.5) only while asking for a game (create / join); a room or a result on screen
 // keeps reconnecting (the server holds the seat 60 s) and never loses the result; single player has plan B instead
 const restAfterFails = (phase, solo, fails, screen) => !solo && fails >= 3 && phase === "asking" && screen !== "result";
-root.L3 = { restAfterFails, interp, stamp, shouldSend, histAt, toWorld, backoff, cleanCode, goals, hasPrize, keepPrize, prizeLive, whyLine, planB, ballAhead, isBot, sameMatch, CODE_ABC };
+// a QR link (?join=) joins straight away, except while plan B rests multiplayer (then the choice screen says so)
+const deepJoin = (code, multiRest) => !!code && !multiRest;
+// multiplayer = first to N goals in up to M seconds (owner ~22:54: 3 and 120, server settings); single player = 1 goal in 60 s
+const subLine = (md, need) => md ? "🤖 " + goals(need || 1) + " wins" : need > 1 ? "First to " + need : "1st goal wins";
+const clockText = ms => { const s = Math.max(0, Math.ceil((ms || 0) / 1000)); return s > 60 ? Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0") : String(s); };
+const scoreText = (sc, a, b) => ((sc && sc[a]) || 0) + " – " + ((sc && sc[b]) || 0);
+/* lag (owner 12 Nov ~23:10 "lags pretty bad"): snapshots are timed by their own step counter n (60 a second), not by when they land,
+   so a stalled line that then delivers a burst keeps their true spacing. base = the fastest recent arrival (arrival − n·step) over 2 s;
+   a snapshot's time = n·step + base. The draw delay for others = how late snapshots usually are (90th %) + one snapshot, kept 60–150 ms. */
+const STEP_MS = 1000 / 60;
+function lagWindow(win, t, n, keepMs){
+  win.push({ t, o: t - n * STEP_MS }); while (win.length > 1 && win[0].t < t - (keepMs || 2000)) win.shift();
+  let base = Infinity; for (const w of win) if (w.o < base) base = w.o;
+  const late = win.map(w => w.o - base).sort((a, b) => a - b), j90 = late[Math.min(late.length - 1, Math.floor(late.length * 0.9))] || 0;
+  return { base, delay: Math.max(60, Math.min(150, j90 + 34)) };
+}
+// own player (lead's rule): never corrected while the finger moves unless the error is over 8 units; a resting finger settles small drift
+// (> 1.5, e.g. after a bump) gently; over 8 eases back fast (~100 ms) instead of jumping. Returns the easing rate a second (0 = leave it).
+const ownRate = (err, fingerMoving) => err > 8 ? 12 : err > 1.5 && !fingerMoving ? 3 : 0;
+// the server is full (err busy, 20+ people at once): ask again by itself after 3, 6, then 10 s; then give up with one word
+const BUSY_WAIT = [3000, 6000, 10000], busyWait = n => n < BUSY_WAIT.length ? BUSY_WAIT[n] : null;
+root.L3 = { busyWait, STEP_MS, lagWindow, ownRate, subLine, clockText, scoreText, deepJoin, restAfterFails, interp, stamp, shouldSend, histAt, toWorld, backoff, cleanCode, goals, hasPrize, keepPrize, prizeLive, whyLine, planB, ballAhead, isBot, sameMatch, CODE_ABC };
 })(typeof globalThis !== "undefined" ? globalThis : this);

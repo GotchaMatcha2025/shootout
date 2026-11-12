@@ -10,7 +10,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800;900&family=Bowlby+One&display=swap">
-<link rel="stylesheet" href="assets/3v3.css?v=5">
+<link rel="stylesheet" href="assets/3v3.css?v=7">
 </head>
 <body>
 <!-- Screens, ids and words = mock-up rev 4 (owner yes to rev 3 ~20:52 + "fewest words", DECISIONS 12 Nov). The skin lives in 3v3.css only. -->
@@ -81,7 +81,7 @@
 
   <section class="scr" id="s-match" hidden>
     <canvas id="pitch" aria-label="Football pitch. Your finger is your player: move it to hit the ball into the goal."></canvas>
-    <div class="hud"><span class="tchip m" id="hudA">MATCHA</span><span class="tchip yz" id="hudB">YUZU</span><span class="clock" id="clock">60</span></div>
+    <div class="hud"><span class="tchip m" id="hudA">MATCHA</span><span class="hscore" id="hudScore" hidden>0 – 0</span><span class="tchip yz" id="hudB">YUZU</span><span class="clock" id="clock">60</span></div>
     <div class="banner" id="banner"></div>
     <div class="hint" id="hint" aria-label="Drag your player"><span class="fing">👆</span> ↑</div>
     <div class="offb" id="offBadge" hidden>Offline · no prize</div>
@@ -135,13 +135,13 @@
   <div class="dbg" id="dbg" hidden></div>
   <div class="ribbon" id="ribbon" hidden></div>
 </main>
-<script src="assets/sim.js?v=5"></script>
-<script src="assets/logic.js?v=5"></script>
-<script src="assets/net.js?v=5"></script>
-<script src="assets/fake.js?v=5"></script>
+<script src="assets/sim.js?v=7"></script>
+<script src="assets/logic.js?v=8"></script>
+<script src="assets/net.js?v=8"></script>
+<script src="assets/fake.js?v=8"></script>
 <script src="assets/draw.js?v=5"></script>
 <script src="assets/sfx.js?v=5"></script>
 <script src="assets/fx.js?v=5"></script>
-<script src="assets/game.js?v=5"></script>
+<script src="assets/game.js?v=8"></script>
 </body>
 </html>

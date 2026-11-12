@@ -8,7 +8,7 @@
   var now = Date.now(), M = 60000;
   var B = { paused: false, botLevel: 1 };
   var C = {
-    ACDEF3: { r: "win", md: 0, size: 2, at: now - 5 * M, prize: { label: "TEST Free sparkling yuzu" }, used: null },
+    ACDEF3: { r: "win", md: 0, size: 2, sc: [3, 1], team: 0, at: now - 5 * M, prize: { label: "TEST Free sparkling yuzu" }, used: null },
     KKKKKK: { r: "win", md: 0, size: 1, at: now - 3 * M, prize: null, why: "cap", used: null },
     MMMMMM: { r: "win", md: 0, size: 1, at: now - 3 * M, prize: { label: "TEST $1 off" }, used: null, refuse: 1 },
     HJKMN4: { r: "lose", md: 0, size: 1, at: now - 10 * M, prize: { label: "TEST $1 off" }, used: now - 3 * M },

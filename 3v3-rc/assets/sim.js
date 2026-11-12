@@ -11,7 +11,7 @@
 
 const C = {
   W: 60, H: 96, RP: 3.3, RB: 1.9, CREASE: 9, POST: .5,              // pitch, player and ball radii, goal circle, post radius
-  GW0: 28, GW1: 40, GROW_AT_S: 15, GROW_PER_S: 8,                    // goals 28 wide, growing to 40 at 8/s from 15 s left
+  GW0: 34, GW1: 46, GROW_AT_S: 15, GROW_PER_S: 8,                    // multiplayer goals 34 wide, growing to 46 at 8/s from 15 s left (owner ~23:22)
   COUNT_S: 3, MATCH_S: 60, CELEB_S: 2.6, DT: 1 / 60, SUB: 2,         // 2 physics sub-steps per 1/60 s step
   HUMAN_MAX: 95, FOLLOW: 45, GLIDE: .8,                              // finger: 45x the gap a second, capped 95 (owner ~21:14: 55 felt delayed); up = x0.8 a sub-step
   HUMAN_REACH: 1,                                                    // CTO G1: a human hits the ball at RP+RB+1.0, bots at RP+RB
@@ -19,10 +19,11 @@ const C = {
   HELP: .2, BALL_MAX: 75, DRAG: .32, WALL_E: .9, HIT_E: .85, POST_E: .8,
   SQUEEZE_V: 24, SLOW_V: 5, UNSTICK_S: 1.5, UNSTICK_V: 14,
   HIT_MIN: 6, HIT_FULL: 70, HIT_GAP_S: .12,                          // a touch is a "hit" event above impulse 6; p = impulse / 70
+  VERSUS_GOALS: 3, MATCH_MIN_S: 10, MATCH_MAX_S: 600,               // multiplayer: first to 3 (owner "Stay at 3", 12 Nov ~23:00); the server passes 120 s
   CHALLENGE_GOALS: 1, GW_CH: 14, HARD: 2.6, RESET_S: 1.5, KICKOFF_S: 1,   // vs the Matcha Bot: 1 goal wins, goals 14 and fixed, bot x2.6 (rev 8)
   LEVEL_MIN: .5, LEVEL_MAX: 1.5, KEEPER_STUN_S: .2, KEEPER_WAIT_S: 2,   // rev 6 feel: the Matcha Bot only keeps goal for 2 s after a kick-off
   SERVE_V: 9, SERVE_SIDE: 3, NEAR_V: 22,                             // the ball rolls to a side at "go"; a post hit above 22/s = near miss                                     // botLevel scales the hard bot's speed and reactions
-  ST_COUNT: 0, ST_PLAY: 1, ST_GOAL: 2, ST_DRAW: 3, ST_END: 4, ST_RESET: 5,   // 3 = time up (versus: draw; challenge: the bot wins, w set)
+  ST_COUNT: 0, ST_PLAY: 1, ST_GOAL: 2, ST_DRAW: 3, ST_END: 4, ST_RESET: 5,   // 3 = time up (w = the team ahead, or -1 level; challenge: the bot)
   TEAMS: [{ name: "Matcha", col: "#6fbf4a" }, { name: "Yuzu", col: "#ffd23f" }]
 };
 C.SUB_DT = C.DT / C.SUB;
@@ -64,7 +65,8 @@ function keepOut(o) { clampField(o); outOfCrease(o); }
 const reach = (m, q) => RP + RB + (q.bot || m.md ? 0 : C.HUMAN_REACH);
 
 // match fields the server may read: st, w, sc, p[i].bot; since = play time since "go"; sv = the team the next serve rolls to
-// {seed, humans:[{team,slot}], cats, size: 1|2|3 (default 3), mode: "versus"|"challenge", goalsToWin (challenge, default 1), botLevel 0.5–1.5}
+// {seed, humans:[{team,slot}], cats, size: 1|2|3 (default 3), mode: "versus"|"challenge", goalsToWin (versus 3 / challenge 1),
+//  matchSecs (default 60), botLevel 0.5–1.5}
 function createMatch(o) {
   o = o && typeof o === "object" ? o : {};
   const size = o.size === 1 || o.size === 2 || o.size === 3 ? o.size : 3, md = o.mode === "challenge" ? 1 : 0;
@@ -72,9 +74,10 @@ function createMatch(o) {
   const humans = Array.isArray(o.humans) ? o.humans : [];
   const isH = (tm, s) => humans.some(u => u && u.team === tm && u.slot === s);
   const hasH = [0, 1].map(tm => BASE[size].some((_, s) => isH(tm, s)));
-  const m = { v: 2, size: size, md: md, need: Number.isInteger(o.goalsToWin) && o.goalsToWin >= 1 && o.goalsToWin <= 9 ? o.goalsToWin : C.CHALLENGE_GOALS,
+  const secs = isNum(o.matchSecs) ? clamp(o.matchSecs, C.MATCH_MIN_S, C.MATCH_MAX_S) : C.MATCH_S;
+  const m = { v: 3, size: size, md: md, need: Number.isInteger(o.goalsToWin) && o.goalsToWin >= 1 && o.goalsToWin <= 9 ? o.goalsToWin : md ? C.CHALLENGE_GOALS : C.VERSUS_GOALS,
     lvl: isNum(o.botLevel) ? clamp(o.botLevel, C.LEVEL_MIN, C.LEVEL_MAX) : 1, ht: hasH[0] !== hasH[1] ? (hasH[0] ? 0 : 1) : -1,   // ht: the one team with humans
-    rs: isNum(o.seed) ? (o.seed >>> 0) | 0 : 0, n: 0, st: C.ST_COUNT, cd: C.COUNT_S, left: C.MATCH_S, gw: md ? C.GW_CH : C.GW0, grew: false,
+    rs: isNum(o.seed) ? (o.seed >>> 0) | 0 : 0, n: 0, st: C.ST_COUNT, cd: C.COUNT_S, left: secs, gw: md ? C.GW_CH : C.GW0, grew: false,
     w: -1, sc: [0, 0], after: 0, stuck: 0, lh: -1e6, since: 0, sv: -1, b: { x: W / 2, y: H / 2, vx: 0, vy: 0 }, p: [] };
   for (let tm = 0; tm < 2; tm++) for (let s = 0; s < size; s++) {
     const x = BASE[size][s][0], y = tm === 0 ? BASE[size][s][1] : H - BASE[size][s][1];
@@ -261,12 +264,13 @@ function moveBall(m, h, ev) {
   } else m.stuck = 0;
 }
 
-// versus: the first goal wins. Challenge: the human team wins at goalsToWin; any other goal = 1.5 s cheer, then a fresh kick-off
+// first to goalsToWin wins (versus: either team; challenge: only the player's team, the bot's goals just reset);
+// any other goal = 1.5 s cheer, then a fresh kick-off from the centre
 function onGoal(m, w, ev) {
   m.sc[w]++;
-  if (m.sv >= 0) m.sv = 1 - m.sv;
+  if (m.sv >= 0) m.sv = 1 - m.sv;   // the next serve goes the other way
   ev.push({ k: "goal", w: w, sc: m.sc.slice() });
-  if (!m.md || (m.sc[w] >= m.need && (m.ht < 0 || w === m.ht))) { m.st = C.ST_GOAL; m.w = w; }
+  if (m.sc[w] >= m.need && (!m.md || m.ht < 0 || w === m.ht)) { m.st = C.ST_GOAL; m.w = w; }
   else { m.st = C.ST_RESET; m.after = 0; }
 }
 // rev 6 feel: at "go" the ball rolls gently toward one team's half: the player in a challenge, else a random side, then alternating
@@ -358,13 +362,14 @@ function step(m, dt) {
     return ev;
   }
   m.left -= dt; m.since += dt;
-  if (!m.md) {   // versus goals grow 28 → 40 from 15 s left; the challenge's goals stay 16
+  if (!m.md) {   // versus goals grow 34 → 46 over the last 15 s of whatever the length is; the challenge's goals stay fixed
     if (m.left <= C.GROW_AT_S + 1e-9 && !m.grew) { m.grew = true; ev.push({ k: "grow" }); }
     if (m.grew) m.gw = Math.min(C.GW1, m.gw + dt * C.GROW_PER_S);
   }
-  if (m.left <= 1e-9) {   // time up: a draw in versus; in a challenge the bot wins (no draw)
+  if (m.left <= 1e-9) {   // time up: in a challenge the bot wins (no draw); in versus the team ahead wins, level = draw (w -1)
     m.left = 0; m.st = C.ST_DRAW;
-    if (m.md && m.ht >= 0) { m.w = 1 - m.ht; ev.push({ k: "timeup", w: m.w }); } else ev.push({ k: "draw" });
+    m.w = m.md && m.ht >= 0 ? 1 - m.ht : m.sc[0] > m.sc[1] ? 0 : m.sc[1] > m.sc[0] ? 1 : -1;
+    ev.push({ k: "timeup", w: m.w });
     return ev;
   }
   think(m, dt);
@@ -384,6 +389,6 @@ function snapshot(m) {
   return s;
 }
 
-return { VERSION: "3v3-sim-2", C: C, mulberry32: mulberry32, createMatch: createMatch, setInput: setInput, setBot: setBot, step: step,
+return { VERSION: "3v3-sim-3", C: C, mulberry32: mulberry32, createMatch: createMatch, setInput: setInput, setBot: setBot, step: step,
   snapshot: snapshot, followTarget: followTarget, stepBall: stepBall, botLabel: botLabel, attackY: attackY, view: view };
 });

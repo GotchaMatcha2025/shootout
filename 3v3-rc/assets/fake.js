@@ -18,13 +18,20 @@ const Fake = (() => {
   let sock = null, dev = null, refuse = 0, closed = false, room = null, match = null, lastEnd = null, acked = null, qT = 0;
   const results = [], stats = { goals: 0, beaten: 0 };   // this fake's own counts (the LED ticker shows only real counts)
 
-  // deliver in order, LAG ms later (+ a little jitter), like one 4G socket
-  function later(fn){ const t = Math.max(qT, Date.now() + LAG + Math.random() * (LAG ? 15 : 0)); qT = t; setTimeout(fn, t - Date.now()); }
-  function out(o){ const s = sock; if (!s) return; const txt = JSON.stringify(o); later(() => { if (s.readyState === 1 && s.onmessage) s.onmessage({ data: txt }); }); }
+  // a 4G-like line, in order per direction: ?rtt= (ms, both ways together; default 2×LAG), ?jitter= (ms, one way), ?gaps=1 (now and then
+  // the line stalls 500 ms, then everything arrives at once). Down = server → phone, up = phone → server.
+  const RTT = +(Q.get("rtt") || 2 * LAG), JIT = +(Q.get("jitter") || (LAG ? 15 : 0)), GAPS = Q.get("gaps") === "1";
+  const qq = { down: 0, up: 0 }; let gapUntil = 0, nextGap = Date.now() + 2500;
+  function later(fn, dir){
+    const n = Date.now(); dir = dir || "down";
+    if (GAPS && n > nextGap){ gapUntil = n + 500; nextGap = n + 2500 + Math.random() * 3000; }
+    const t = Math.max(qq[dir], n + RTT / 2 + Math.random() * JIT, gapUntil); qq[dir] = t; setTimeout(fn, t - n);
+  }
+  function out(o){ const s = sock; if (!s) return; const txt = JSON.stringify(o); later(() => { if (s.readyState === 1 && s.onmessage) s.onmessage({ data: txt }); }, "down"); }
   function socket(d){
     dev = d;
     const s = { readyState: 0, onopen: null, onmessage: null, onclose: null, onerror: null,
-      send(txt){ if (s.readyState !== 1) throw new Error("closed"); later(() => { if (sock === s) recv(JSON.parse(txt)); }); },
+      send(txt){ if (s.readyState !== 1) throw new Error("closed"); later(() => { if (sock === s) recv(JSON.parse(txt)); }, "up"); },
       close(){ if (s.readyState === 3) return; s.readyState = 3; if (sock === s){ sock = null; gone(); } setTimeout(() => s.onclose && s.onclose({}), 0); } };
     setTimeout(() => {
       if (s.readyState !== 0) return;
@@ -99,13 +106,15 @@ const Fake = (() => {
     else { size = room.size; you = room.you; md = 0; cats = room.seats.map(col => col.map(s => s.cat)); bots = room.seats.map(col => col.map(() => 0));
       room.k = null; room.rm = {}; room.used = true; room.after = 0; }
     const seed = Math.floor(Math.random() * 2147483647);
-    const m = S().createMatch({ seed, humans: [you], cats, size, mode: md ? "challenge" : "versus", goalsToWin: need() });
+    // multiplayer: first to VS_GOALS in VS_SECS (owner ~22:54; ?vsgoals= / ?vssecs= for quick tests), as the server passes them
+    const vsNeed = +(Q.get("vsgoals") || 3), vsSecs = +(Q.get("vssecs") || 120);
+    const m = S().createMatch(md ? { seed, humans: [you], cats, size, mode: "challenge", goalsToWin: need() } : { seed, humans: [you], cats, size, mode: "versus", goalsToWin: vsNeed, matchSecs: vsSecs });
     // the fake friends are played by the sim's bots, but they are people on the phone (bots = 0)
-    match = { id: "F" + code(7), m, you, size, md, cats, bots, seed, at: now(), ack: 0, solo, bot: false, goneAt: 0, acc: 0, lastT: Date.now(), t0: Date.now() };
+    match = { id: "F" + code(7), m, you, size, md, cats, bots, seed, at: now(), need: md ? need() : vsNeed, secs: md ? S().C.MATCH_S : vsSecs, ack: 0, solo, bot: false, goneAt: 0, acc: 0, lastT: Date.now(), t0: Date.now() };
     out(startMsg());
     match.tick = setInterval(tick, 1000 / 30);
   }
-  function startMsg(){ const M = match; return { t: "start", id: M.id, seed: M.seed, you: M.you, cats: M.cats, bots: M.bots, at: M.at, md: M.md, need: M.md ? need() : undefined, size: M.size }; }
+  function startMsg(){ const M = match; return { t: "start", id: M.id, seed: M.seed, you: M.you, cats: M.cats, bots: M.bots, at: M.at, md: M.md, need: M.need, secs: M.secs, size: M.size }; }
   function tick(){
     const M = match; if (!M) return;
     const t = Date.now(); M.acc = Math.min(M.acc + (t - M.lastT) / 1000, 4 / 60); M.lastT = t;   // real elapsed time, at most 4 steps a tick
@@ -176,7 +185,7 @@ const Fake = (() => {
 
   async function post(path, body){
     await new Promise(r => setTimeout(r, LAG * 2));
-    if (path === "/") return { ok: true, v: "fake", closed, solo: null, need: need(), goals: stats.goals, beaten: stats.beaten, status: 200 };
+    if (path === "/") return { ok: true, v: "fake", closed, solo: Q.get("sololocal") === "1" ? "local" : null, need: need(), goals: stats.goals, beaten: stats.beaten, status: 200 };
     if (path === "/result"){
       const r = body && body.code ? results.find(x => x.code === body.code) : results[results.length - 1];
       return r ? { ok: true, id: r.id, r: r.r, at: r.at, prize: r.prize, used: r.used, code: r.code, exp: r.exp, why: r.why, md: r.md, status: 200 } : { ok: false, e: "not-found", status: 404 };

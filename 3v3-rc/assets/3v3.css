@@ -79,6 +79,7 @@ a{color:var(--yuzu)}
 .coderow{display:flex;gap:10px;width:100%;max-width:420px;margin:46px 0 0}   /* rev 9: "CODE [____] Join" first, below the sound button */
 .coderow .btn{flex:0 0 auto;width:auto;padding:14px 20px}
 .coderow .codein{font-size:26px;padding:10px}
+.codein:disabled{opacity:.4}
 .mode:focus-visible,.codein:focus-visible,.slot:focus-visible{outline:3px solid var(--flood);outline-offset:3px}
 .row{display:flex;gap:10px;width:100%;max-width:420px;margin:0}
 .row .btn{flex:0 0 auto;width:auto;padding:16px 18px}
@@ -106,6 +107,8 @@ a{color:var(--yuzu)}
 #pitch{position:absolute;top:0;right:0;bottom:0;left:0;width:100%;height:100%;touch-action:none}
 .hud{position:absolute;top:calc(var(--st) + 12px);left:calc(var(--sl) + 12px);right:calc(var(--sr) + 64px);z-index:5;display:flex;align-items:center;gap:8px;pointer-events:none}
 .tchip{font:900 12px/1 var(--f-body);letter-spacing:1px;padding:7px 9px;border-radius:999px;color:var(--night);white-space:nowrap}
+.hscore{font:400 26px/1 var(--f-display);color:var(--flood);text-shadow:0 0 14px #000,0 2px 0 #000a;white-space:nowrap;font-variant-numeric:tabular-nums}   /* the live score, Matcha – Yuzu */
+.tchip.me{box-shadow:0 0 0 2px var(--flood)}
 .tchip.m{background:var(--matcha)} .tchip.yz{background:var(--yuzu)} .tchip.ch{background:var(--flood);letter-spacing:.3px;min-width:0;overflow:hidden;text-overflow:ellipsis}
 .clock{margin-left:auto;font:400 22px/1 var(--f-display);color:var(--flood);min-width:40px;text-align:right;font-variant-numeric:tabular-nums}
 .banner{position:absolute;left:0;right:0;top:42%;z-index:6;text-align:center;font:400 46px/1 var(--f-display);color:var(--flood);text-shadow:0 0 30px #000,0 4px 0 #000a;pointer-events:none;transition:opacity .25s;padding:0 12px}

@@ -77,6 +77,47 @@ test('prize card: only with a code and a prize name; never for a lost or timed-o
   assert.equal(L.hasPrize({ code: null, prize: p, md: 1, r: 'win' }), false, 'no code (plan B without the server): no card');
 });
 
+test('prize ticket: the newest prize is kept; a later result with no prize never replaces it; live until used or expired', () => {
+  const win = { id: 'm1', code: 'K7M2QX', prize: { label: 'FREE MATCHA' }, exp: 2000, md: 0, r: 'win' };
+  const kept = L.keepPrize(null, win);
+  assert.deepEqual(JSON.parse(JSON.stringify(kept)), { code: 'K7M2QX', label: 'FREE MATCHA', exp: 2000, used: null, id: 'm1', at: null });
+  assert.equal(L.keepPrize(kept, { id: 'm2', code: 'T4CXYZ', prize: null, md: 1, r: 'lose' }), kept, 'a later loss keeps the ticket');
+  assert.equal(L.keepPrize(kept, { id: 'm3', code: 'AAAAAA', prize: null, md: 0, r: 'win', why: 'used' }), kept, 'a later win without a prize keeps it');
+  assert.equal(L.keepPrize(kept, { ...win, id: 'm4', code: 'NEW111' }).code, 'NEW111', 'a newer prize replaces it');
+  assert.equal(L.prizeLive(kept, 1999), true); assert.equal(L.prizeLive(kept, 2000), false, 'expired');
+  assert.equal(L.prizeLive({ ...kept, used: 1500 }, 1600), false, 'used'); assert.equal(L.prizeLive(null, 0), false);
+});
+
+test('no-prize line by reason; none → nothing; never on a lost game vs the bot', () => {
+  const r = why => ({ code: 'K7M2QX', prize: null, md: 0, r: 'win', why });
+  assert.equal(L.whyLine(r('used')), 'Prize used today'); assert.equal(L.whyLine(r('hours')), 'Prizes in booth hours');
+  assert.equal(L.whyLine(r('offline')), 'Offline · no prize'); assert.equal(L.whyLine(r('cap')), 'No prizes left');
+  assert.equal(L.whyLine(r('none')), ''); assert.equal(L.whyLine(r(undefined)), '');
+  assert.equal(L.whyLine({ ...r('used'), md: 1, r: 'lose' }), '', 'lost vs the bot');
+  assert.equal(L.whyLine({ ...r('used'), prize: { label: 'X' } }), '', 'there is a card');
+});
+
+test('plan B after 6 s of silence: wait while the socket is up, local only if told or after 2+ failed connects, else resting', () => {
+  assert.equal(L.planB(true, 0, false), 'wait'); assert.equal(L.planB(false, 1, false), 'rest');
+  assert.equal(L.planB(false, 2, false), 'local'); assert.equal(L.planB(true, 0, true), 'local');
+});
+
+test('ball: drawn ahead while live, at quarter speed in the goal stop (no snap back), interpolated at a kick-off', () => {
+  assert.equal(L.ballAhead(1, 0.12), 0.12); assert.equal(L.ballAhead(2, 0.12), 0.03); assert.equal(L.ballAhead(3, 0.12), 0.03);
+  assert.equal(L.ballAhead(0, 0.12), null); assert.equal(L.ballAhead(5, 0.12), null);
+});
+
+test('BOT label: the snapshot bitmask wins; without it the kick-off list', () => {
+  assert.equal(L.isBot(0b10, 1, 0), true, 'a dropped phone held by a bot'); assert.equal(L.isBot(0b10, 0, 1), false);
+  assert.equal(L.isBot(undefined, 0, 1), true); assert.equal(L.isBot(undefined, 0, 0), false); assert.equal(L.isBot(undefined, 3, undefined), true);
+});
+
+test('result recovery matches the match id, never the time', () => {
+  assert.equal(L.sameMatch({ ok: true, code: 'K7M2QX', id: 'm1' }, 'm1'), true);
+  assert.equal(L.sameMatch({ ok: true, code: 'K7M2QX', id: 'm0', at: Date.now() }, 'm1'), false, 'an older match');
+  assert.equal(L.sameMatch({ ok: false }, 'm1'), false); assert.equal(L.sameMatch({ ok: true, code: 'X', id: 'm1' }, null), false);
+});
+
 test('sim.js copy is byte-identical to the shared one (set SIM_SRC)', { skip: !process.env.SIM_SRC }, () => {
   const h = f => crypto.createHash('sha256').update(fs.readFileSync(f)).digest('hex');
   assert.equal(h(here + 'sim.js'), h(process.env.SIM_SRC));

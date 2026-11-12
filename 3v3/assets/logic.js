@@ -42,5 +42,25 @@ const cleanCode = s => String(s || "").toUpperCase().replace(/O/g, "0").split(""
 const goals = n => n === 1 ? "1 goal" : n + " goals";
 // the result's prize card shows only when there is something to redeem: a code and a prize name; a lost game vs the bot never (§12.3, §13)
 const hasPrize = res => !!(res && res.code && res.prize && res.prize.label && !(res.md === 1 && res.r !== "win"));
-root.L3 = { interp, stamp, shouldSend, histAt, toWorld, backoff, cleanCode, goals, hasPrize, CODE_ABC };
+// the prize ticket (adversarial S1: a code must never vanish): the newest prize is kept on its own; a later result without a prize never
+// replaces it; it shows until staff use it or it expires
+function keepPrize(stored, res){
+  if (!hasPrize(res)) return stored || null;
+  return { code: res.code, label: res.prize.label, exp: res.exp || null, used: res.used || null, id: res.id || null, at: res.at || null };
+}
+const prizeLive = (p, now) => !!(p && p.code && !p.used && !(p.exp && now >= p.exp));
+// a result with no prize card says why, in a few words (none → nothing; a lost game vs the bot never has a prize, so no line)
+const WHY = { used: "Prize used today", hours: "Prizes in booth hours", offline: "Offline · no prize", cap: "No prizes left" };
+const whyLine = res => !res || hasPrize(res) || (res.md === 1 && res.r !== "win") ? "" : WHY[res.why] || "";
+// plan B (§8) when single player hears nothing for 6 s: a socket that is up = the hello is in flight, keep waiting; play on the phone only
+// when the server says so or the line really failed (2+ connects); anything else = the game is resting
+const planB = (up, fails, soloLocal) => soloLocal ? "local" : up ? "wait" : fails >= 2 ? "local" : "rest";
+// the ball is drawn ahead of the newest snapshot while the ball is live, and at the sim's quarter speed during the goal / time-up stop,
+// so the switch never snaps it back; at a kick-off (countdown, reset) it is interpolated like everyone else
+const ballAhead = (st, ahead) => st === 1 ? ahead : st === 2 || st === 3 ? ahead * 0.25 : null;
+// "BOT" over a seat: the snapshot's bt bitmask (seat i held by a bot now, e.g. a dropped phone) wins over the kick-off list
+const isBot = (bt, i, startBot) => typeof bt === "number" ? !!((bt >> i) & 1) : startBot !== 0;
+// a recovered result (after a sleep or reload) belongs to this match only if the ids match, never by time
+const sameMatch = (r, id) => !!(r && r.ok && r.code && id && r.id === id);
+root.L3 = { interp, stamp, shouldSend, histAt, toWorld, backoff, cleanCode, goals, hasPrize, keepPrize, prizeLive, whyLine, planB, ballAhead, isBot, sameMatch, CODE_ABC };
 })(typeof globalThis !== "undefined" ? globalThis : this);

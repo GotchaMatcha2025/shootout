@@ -21,17 +21,21 @@ const buzz = p => { try { if (navigator.vibrate) navigator.vibrate(p); } catch (
 const ERRS = { "no-room": "No game", "room-full": "Full", started: "Started", busy: "Busy", bad: "Try again" };   // one short line (§13)
 
 let screen = "home";
-function show(n){ screen = n; SCREENS.forEach(s => { $("#s-" + s).hidden = s !== n; }); if (n === "mode") modeState(); if (n === "match") sizePads(); pillCheck(); }
+function show(n){ screen = n; SCREENS.forEach(s => { $("#s-" + s).hidden = s !== n; }); if (n === "mode") modeState(); if (n === "match") sizePads(); pillCheck(); ticketState(); }
 function toast(msg, ms){ const t = $("#toast"); t.textContent = msg; t.hidden = false; clearTimeout(toast.h); toast.h = setTimeout(() => { t.hidden = true; }, ms || 2200); }
 
 const G = { cat: Store.get("s3v3:cat"), joined: !!Store.get("s3v3:joined"), want: null, phase: "idle", solo: false, local: false, everUp: false,
-  room: null, M: null, last: null, need: C.CHALLENGE_GOALS || 1, multiRest: false, soloLocal: false, soloTimer: 0, roomTimer: 0, rematch: false };
+  room: null, M: null, last: null, need: C.CHALLENGE_GOALS || 1, multiRest: false, soloLocal: false, soloTimer: 0, roomTimer: 0, rematch: false,
+  prize: Store.get(NS + "prize") };   // the newest prize ticket (adversarial S1): {code, label, exp, used, id}
 if (!(G.cat >= 0 && G.cat < 4)) G.cat = 0;
 
 /* ---------- the socket ---------- */
 const sock = Net.Socket({
   open(){
     if (!sock.isLocal()){ G.everUp = true; G.multiRest = false; }
+    if (G.solo && G.phase === "asking" && !sock.isLocal()){   // connected: the plan-B timer stops; a server that never answers the hello = resting
+      clearTimeout(G.soloTimer); G.soloTimer = setTimeout(() => { if (G.phase === "asking" && G.solo && !G.local){ leaveAll(); show("rest"); } }, 10000);
+    }
     if (G.phase === "asking" && G.want) sock.send(G.want);              // a fresh start: hello (solo) / create / join
     else if (G.phase === "room" && G.room){                                // the server holds a room seat 5 s; if it has gone, join again
       const code = G.room.code; clearTimeout(G.roomTimer);
@@ -110,16 +114,22 @@ $("#multiBack").addEventListener("click", () => { leaveAll(); show("mode"); });
 /* ---------- single player: vs the Matcha Bot (§7, §8, §11) ---------- */
 function soloHud(){ const A = $("#hudA"), B = $("#hudB"); A.textContent = "YOU"; B.textContent = "MATCHA BOT"; A.className = "tchip m"; B.className = "tchip yz"; }
 function startSolo(){
-  leaveAll(); G.solo = true; G.want = { t: "hello", mode: "solo", cat: G.cat }; G.phase = "asking";
+  leaveAll(); $("#offBadge").hidden = true; G.solo = true; G.want = { t: "hello", mode: "solo", cat: G.cat }; G.phase = "asking";
   show("match"); soloHud(); banner("🤖 " + L3.goals(G.need) + " wins"); $("#hint").hidden = false;
   if (G.soloLocal){ playLocal(); return; }
   sock.start(false);
-  // plan B (§8): no real-time server within ~6 s → this one match runs on the phone; only its code comes from the server
-  G.soloTimer = setTimeout(() => { if (G.phase === "asking" && G.solo){ G.multiRest = true; playLocal(); } }, CONFIG.soloConnectMs);
+  // plan B (§8): 6 s without a connection → L3.planB decides: still connecting with the socket up = wait; 2+ failed connects = play on the
+  // phone (and Friends rests: truly offline); otherwise the game is resting
+  G.soloTimer = setTimeout(() => {
+    if (G.phase !== "asking" || !G.solo || G.local) return;
+    const d = L3.planB(sock.up(), sock.fails(), G.soloLocal);
+    if (d === "local"){ G.multiRest = true; playLocal(); } else if (d === "rest"){ leaveAll(); show("rest"); }
+  }, CONFIG.soloConnectMs);
 }
 function playLocal(){
   clearTimeout(G.soloTimer); sock.stop(); G.solo = true; G.local = true; G.phase = "asking"; G.want = { t: "hello", mode: "solo", cat: G.cat };
   if (screen !== "match"){ show("match"); soloHud(); }
+  $("#offBadge").hidden = false;   // a match on the phone never gives a prize (§12.3)
   sock.start(true);
 }
 
@@ -268,9 +278,10 @@ function sendInput(force){
 }
 
 function ballTarget(M, N, I, now){
-  if (N.st !== C.ST_PLAY) return { x: I.b[0], y: I.b[1] };
-  // the ball is drawn where it will be when our finger reaches the server: newest snapshot + one round trip + its age, at most 150 ms
-  const ahead = Math.min(CONFIG.aheadMaxMs, Math.max(0, now - N.arr + Net.clock.rtt)) / 1000;
+  // the ball is drawn where it will be when our finger reaches the server: newest snapshot + one round trip + its age, at most 150 ms;
+  // in the goal / time-up stop the same, at the sim's quarter speed (code review M4: switching to the 100 ms-behind view snapped it back)
+  const ahead = L3.ballAhead(N.st, Math.min(CONFIG.aheadMaxMs, Math.max(0, now - N.arr + Net.clock.rtt)) / 1000);
+  if (ahead === null) return { x: I.b[0], y: I.b[1] };
   const b = { x: N.b[0], y: N.b[1], vx: N.b[2], vy: N.b[3] };
   if (typeof Sim3.stepBall === "function"){ if (ahead > 0) Sim3.stepBall(b, ahead, N.gw); }   // the server's own walls, posts and drag
   else { b.x = Math.max(C.RB, Math.min(C.W - C.RB, b.x + b.vx * ahead)); b.y = b.y + b.vy * ahead; }
@@ -291,14 +302,15 @@ function drawMatch(dt, now){
   } else own.on = false;
   // ball: a new snapshot moves the target; the jump is eased away over ~80 ms instead of drawn
   const bt = ballTarget(M, N, I, now), B = M.ball, mode = N.st === C.ST_PLAY;
-  if (B.snap !== N || B.mode !== mode){ if (B.dx !== null){ B.ox = B.dx - bt.x; B.oy = B.dy - bt.y; if (Math.hypot(B.ox, B.oy) > 8) B.ox = B.oy = 0; } B.snap = N; B.mode = mode; }
+  // only a kick-off (countdown / reset: everyone back on their spot) jumps; every other change is eased
+  if (B.snap !== N || B.mode !== mode){ if (B.dx !== null){ B.ox = B.dx - bt.x; B.oy = B.dy - bt.y; if (N.st === C.ST_COUNT || N.st === 5 || Math.hypot(B.ox, B.oy) > 30) B.ox = B.oy = 0; } B.snap = N; B.mode = mode; }
   const kk = Math.exp(-dt / 0.027); B.ox *= kk; B.oy *= kk; B.dx = bt.x + B.ox; B.dy = bt.y + B.oy;
   if (!Draw.st.lite){ M.trail.push([B.dx, B.dy]); if (M.trail.length > 12) M.trail.shift(); }
   const players = [];
   for (let i = 0; i < n; i++){
     const team = i < size ? 0 : 1, slot = i % size, mine = i === me, p = mine && own.on ? [own.x, own.y] : I.p[i];
     const cat = (M.cats[team] || [])[slot], bot = (M.bots[team] || [])[slot];
-    players.push({ x: p[0], y: p[1], team, me: mine, cat: cat >= 0 ? cat : (i % 4), label: bot === 0 ? "" : "BOT" });
+    players.push({ x: p[0], y: p[1], team, me: mine, cat: cat >= 0 ? cat : (i % 4), label: !mine && L3.isBot(N.bt, i, bot) ? "BOT" : "" });
   }
   if (Draw.st.rip){ Draw.st.rip.t += dt; Draw.st.rip.a = Math.max(0, Draw.st.rip.a - dt * 0.8); if (!Draw.st.rip.a) Draw.st.rip = null; }
   const fast = mode && Math.hypot(N.b[2], N.b[3]) > 8;
@@ -314,7 +326,7 @@ function drawMatch(dt, now){
 async function lostMatch(){
   const M = G.M; if (!M) return; G.M = null; G.phase = "idle";
   const r = await Net.post("/result", { dev: Net.dev });
-  if (r && r.ok && r.code && r.at >= M.at - 5000){ onEnd({ id: M.id, r: r.r, code: r.code, prize: r.prize, used: r.used, md: M.md, sc: M.sc, team: M.you.team }); return; }
+  if (L3.sameMatch(r, M.id)){ onEnd({ id: M.id, r: r.r, code: r.code, prize: r.prize, used: r.used, exp: r.exp, why: r.why, md: M.md, sc: M.sc, team: M.you.team }); return; }
   leaveAll(); show("mode"); toast("Match lost");
 }
 
@@ -324,8 +336,9 @@ function onEnd(m){
   if (G.last && G.last.id === m.id && screen === "result") return;
   const M = G.M, team = M ? M.you.team : (typeof m.team === "number" ? m.team : 0);
   const res = { id: m.id, r: m.r, w: m.w, code: m.code || null, prize: m.prize || null, md: m.md !== undefined ? (m.md ? 1 : 0) : (M ? M.md : 0),
-    sc: Array.isArray(m.sc) ? m.sc : M ? M.sc : null, team, at: Date.now(), used: m.used || null, solo: G.solo };
+    sc: Array.isArray(m.sc) ? m.sc : M ? M.sc : null, team, at: Date.now(), used: m.used || null, solo: G.solo, exp: m.exp || null, why: m.why || null };
   G.last = res; Store.set(NS + "last", res); Store.del(NS + "pend");
+  const kept = L3.keepPrize(G.prize, res); if (kept !== G.prize){ G.prize = kept; Store.set(NS + "prize", kept); }   // a later no-prize result never replaces it
   G.M = null; clearTimeout(G.soloTimer);
   if (G.solo){ G.phase = "idle"; setTimeout(() => { if (G.phase === "idle") sock.stop(); }, 1200); } else G.phase = G.room ? "room" : "idle";
   Sfx.bedStop(); showResult(res);
@@ -337,6 +350,7 @@ function showResult(res){
   $("#rTitle").textContent = win ? "WIN!" : res.r === "draw" ? "DRAW" : "LOSE";
   $("#rEyebrow").textContent = ch ? "🤖 " + (sc[1 - me] || 0) + " – " + (sc[me] || 0) + " YOU" : (sc[me] || 0) + " – " + (sc[1 - me] || 0);
   prizeCard(res);
+  const why = L3.whyLine(res); $("#noPrize").textContent = why; $("#noPrize").hidden = !why;
   $("#again").textContent = res.solo ? "↻ Again" : "↻ Rematch"; $("#again").disabled = false; G.rematch = false;
   show("result");
 }
@@ -345,16 +359,39 @@ const hasPrize = L3.hasPrize;
 function prizeCard(res){
   const has = hasPrize(res);
   $("#prize").hidden = !has; if (!has) return;
-  $("#pV").textContent = res.prize.label; $("#pCode").textContent = res.code;
+  $("#pV").textContent = res.prize.label; $("#pCode").textContent = res.code; $("#pBy").textContent = res.exp && !res.used ? "by " + hhmm(res.exp) : "";
   $("#pS").textContent = res.used ? "✓ Used " + hhmm(res.used) : "Redeem at the counter"; $("#prize").classList.toggle("is-used", !!res.used);
 }
-// staff redeem on their page; when this page comes back, it asks again so the person sees "✓ Used …"
+/* the ticket: 🎟 on every screen but the pitch while the newest prize is unused and not expired; it opens the same card */
+function ticketState(){
+  const live = L3.prizeLive(G.prize, Date.now()), sheet = $("#ticket");
+  const on = live && screen !== "match" && sheet.hidden && !(screen === "result" && G.last && G.last.code === G.prize.code);
+  if ($("#ticketBtn").hidden === on) $("#ticketBtn").hidden = !on;
+  if (!sheet.hidden){ const p = G.prize; if (!p){ sheet.hidden = true; return; }
+    $("#tV").textContent = p.label; $("#tCode").textContent = p.code; $("#tBy").textContent = p.exp && !p.used ? "by " + hhmm(p.exp) : "";
+    $("#tS").textContent = p.used ? "✓ Used " + hhmm(p.used) : p.exp && Date.now() >= p.exp ? "Expired" : "Redeem at the counter"; }
+}
+$("#ticketBtn").addEventListener("click", () => { $("#ticket").hidden = false; ticketState(); recheckPrize(); });
+$("#ticketClose").addEventListener("click", () => { $("#ticket").hidden = true; ticketState(); });
+// staff redeem on their page: when this page comes back (or loads), it asks the server about the ticket, so it shows "✓ Used"
+async function recheckPrize(){
+  const p = G.prize; if (!p || !p.code || p.used) return;
+  const r = await Net.post("/result", { dev: Net.dev, code: p.code });
+  if (!r || !r.ok || G.prize !== p) return;
+  if (r.used) p.used = r.used; if (r.exp) p.exp = r.exp; Store.set(NS + "prize", p);
+  if (G.last && G.last.code === p.code){ G.last.used = p.used; G.last.exp = p.exp; Store.set(NS + "last", G.last); if (screen === "result") prizeCard(G.last); }
+  ticketState();
+}
+// the result on screen: asked again when the page comes back (prize, use); the ticket has its own check
 async function recheck(){
-  const res = G.last; if (!res || !res.code || res.used) return;
+  const res = G.last; if (!res || !res.code || res.used){ recheckPrize(); return; }
   const r = await Net.post("/result", { dev: Net.dev, code: res.code });
-  if (!r || !r.ok || G.last !== res) return;
-  if (r.used) res.used = r.used; if (r.prize !== undefined) res.prize = r.prize; Store.set(NS + "last", res);
-  if (screen === "result") prizeCard(res);
+  if (r && r.ok && G.last === res){
+    if (r.used) res.used = r.used; if (r.prize !== undefined) res.prize = r.prize; if (r.exp) res.exp = r.exp; Store.set(NS + "last", res);
+    const kept = L3.keepPrize(G.prize, res); if (kept !== G.prize){ G.prize = kept; Store.set(NS + "prize", kept); }
+    if (screen === "result") prizeCard(res);
+  }
+  recheckPrize();
 }
 $("#again").addEventListener("click", () => {
   if (G.last && G.last.solo){ startSolo(); return; }
@@ -403,7 +440,7 @@ function drawDemo(dt){
 }
 
 /* ---------- the loop: paused while the page is hidden ---------- */
-let rafId = 0, lastT = 0, T = 0;
+let rafId = 0, lastT = 0, T = 0, tick = 0;
 function frame(now){
   rafId = requestAnimationFrame(frame);
   const dt = Math.min(0.05, Math.max(0, (now - lastT) / 1000)); lastT = now; T += dt;
@@ -411,14 +448,15 @@ function frame(now){
   else if (screen === "match") drawMatch(dt, now);
   else if (screen === "lobby") roomTick();
   if (screen !== "match") Fx.setStands(null);
+  if ((tick = (tick + 1) % 30) === 0) ticketState();   // expiry, about twice a second
   Fx.frame(dt); perfWatch(dt); sendInput(false); pillCheck(); dbg();
 }
 document.addEventListener("visibilitychange", () => {
   if (document.hidden){ if (finger.a){ finger.a = 0; finger.id = null; sendInput(true); } cancelAnimationFrame(rafId); rafId = 0; Sfx.bedStop(); return; }
   lastT = performance.now(); if (!rafId) rafId = requestAnimationFrame(frame);
-  sock.nudge(); if (screen === "result") recheck();
+  sock.nudge(); recheck();
 });
-window.addEventListener("pageshow", e => { if (e.persisted){ sock.nudge(); if (screen === "result") recheck(); } });
+window.addEventListener("pageshow", e => { if (e.persisted){ sock.nudge(); recheck(); } });
 
 /* ---------- start ---------- */
 function applyHealth(h){
@@ -431,14 +469,16 @@ function applyHealth(h){
   sizePads(); lastT = performance.now(); rafId = requestAnimationFrame(frame);
   const last = Store.get(NS + "last"), pend = Store.get(NS + "pend");
   // a reload shows the last result again only while there is a prize to redeem (staff take codes for 30 min)
-  if (hasPrize(last) && Date.now() - last.at < CONFIG.resultKeepMs){ G.last = last; showResult(last); recheck(); }
+  if (hasPrize(last) && Date.now() - last.at < CONFIG.resultKeepMs){ G.last = last; showResult(last); }
   else show("home");
+  if (!G.prize && hasPrize(last)){ G.prize = L3.keepPrize(null, last); Store.set(NS + "prize", G.prize); }   // a result saved before the ticket key
+  recheck();   // shows "✓ Used" if staff already took the ticket
   const h = await Net.health(); applyHealth(h);
   // §9.2: a match this phone started but never got the end of (it slept, or the page was closed): ask the server for it
   if (pend && Date.now() - pend.at < 10 * 60000 && screen !== "rest"){
     const r = await Net.post("/result", { dev: Net.dev });
-    if (r && r.ok && r.code && (!G.last || G.last.code !== r.code) && (!r.at || r.at >= pend.at - 60000)){
-      G.solo = false; onEnd({ id: pend.id, r: r.r, code: r.code, prize: r.prize, used: r.used, md: r.md, sc: r.sc, team: r.team });
+    if (L3.sameMatch(r, pend.id) && (!G.last || G.last.code !== r.code)){
+      G.solo = false; onEnd({ id: pend.id, r: r.r, code: r.code, prize: r.prize, used: r.used, exp: r.exp, why: r.why, md: r.md, sc: r.sc, team: r.team });
     }
     Store.del(NS + "pend");
   }

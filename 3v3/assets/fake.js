@@ -9,6 +9,7 @@ const Fake = (() => {
   const SKEW = FAKE ? 2345 : 0;                                        // a wrong phone clock on purpose: the countdowns must still be right
   const FRIENDS = Q.get("friends") !== "0", SOLO_SIZE = +(Q.get("solo") || 1) === 3 ? 3 : 1;
   const PRIZE = Q.get("prize") === "1" ? { win: "TEST FREE MATCHA", lose: "TEST $1 OFF", draw: "TEST $1 OFF" } : null;   // ?prize=1: labels as staging TEST
+  const WHY = Q.get("why");   // ?why=used|hours|offline|cap|none: no prize, for this reason
   const need = () => (globalThis.Sim3 && Sim3.C.CHALLENGE_GOALS) || 1;   // one goal beats the Matcha Bot (owner 12 Nov ~20:34, §11)
   const ABC = "ACDEFHJKMNPQRTUVWXY34679", now = () => Date.now() + SKEW, S = () => globalThis.Sim3;
   const code = n => { let c = ""; for (let i = 0; i < n; i++) c += ABC[Math.floor(Math.random() * ABC.length)]; return c; };
@@ -105,7 +106,9 @@ const Fake = (() => {
         out(Object.assign({ t: "ev" }, e));
       }
     }
-    out(Object.assign({ t: "s" }, S().snapshot(M.m), { ack: M.ack }));
+    // bt: seats a bot holds right now (the bot side, and this phone's seat while it is away); the fake friends count as people
+    let bt = 0; for (let t = 0; t < 2; t++) for (let i = 0; i < M.size; i++) if ((M.bots[t] || [])[i] === 1 || (M.bot && t === M.you.team && i === M.you.slot)) bt |= 1 << (t * M.size + i);
+    out(Object.assign({ t: "s" }, S().snapshot(M.m), { ack: M.ack, bt }));
   }
   async function finish(e){
     const M = match; clearInterval(M.tick); match = null;
@@ -113,13 +116,13 @@ const Fake = (() => {
     const sc = snap.sc || [w === 0 ? 1 : 0, w === 1 ? 1 : 0];
     let r = e && (me === 0 ? e.r0 : e.r1);
     if (!r) r = M.md ? (w === me ? "win" : "lose") : (w < 0 ? "draw" : w === me ? "win" : "lose");
-    let c = code(6), prize = PRIZE && !(M.md && r !== "win") ? { label: PRIZE[r] } : null;
+    let c = code(6), prize = PRIZE && !WHY && !(M.md && r !== "win") ? { label: PRIZE[r] } : null, why = prize ? null : WHY || "none";
     if (!FAKE){   // plan B: the code still comes from the server
       const res = await Net.post("/solo", { dev, goals: sc[me], ms: Date.now() - M.t0 });
-      c = res && res.ok && res.code ? res.code : null; prize = res && res.prize || null; if (res && res.r) r = res.r;
+      c = res && res.ok && res.code ? res.code : null; prize = null; why = "offline"; if (res && res.r) r = res.r;   // played on the phone: never a prize (§12.3)
     }
-    const msg = { t: "end", id: M.id, r, w, code: c, prize, md: M.md, sc };
-    if (c) results.push({ code: c, r, at: now(), prize, used: null });
+    const at = now(), msg = { t: "end", id: M.id, r, w, code: c, prize, md: M.md, sc, exp: at + 30 * 60000, why };
+    if (c) results.push({ id: M.id, code: c, r, at, prize, used: null, exp: msg.exp, why, md: M.md });
     lastEnd = msg; out(msg);
     if (room && !M.solo){ room.after = 1; out(roomMsg()); }   // the room stays for a rematch
   }
@@ -163,7 +166,7 @@ const Fake = (() => {
     if (path === "/") return { ok: true, v: "fake", closed, solo: null, need: need(), status: 200 };
     if (path === "/result"){
       const r = body && body.code ? results.find(x => x.code === body.code) : results[results.length - 1];
-      return r ? { ok: true, r: r.r, at: r.at, prize: r.prize, used: r.used, code: r.code, status: 200 } : { ok: false, e: "not-found", status: 404 };
+      return r ? { ok: true, id: r.id, r: r.r, at: r.at, prize: r.prize, used: r.used, code: r.code, exp: r.exp, why: r.why, md: r.md, status: 200 } : { ok: false, e: "not-found", status: 404 };
     }
     return { ok: false, e: "not-found", status: 404 };
   }
@@ -172,7 +175,8 @@ const Fake = (() => {
     drop(ms){ refuse = Date.now() + (ms || 0); const s = sock; if (s){ sock = null; s.readyState = 3; gone(); setTimeout(() => s.onclose && s.onclose({}), 0); } },
     redeem(c){ const r = c ? results.find(x => x.code === c) : results[results.length - 1]; if (r) r.used = now(); return !!r; },
     close(on){ closed = on !== false; },
-    goal(team){ if (!match) return false; const C = S().C; match.m.b = { x: C.W / 2, y: team === 0 ? 1.5 : C.H - 1.5, vx: 0, vy: team === 0 ? -40 : 40 }; return true; },   // put the ball in a goal mouth
+    goal(team, far){ if (!match) return false; const C = S().C, d = far ? 14 : 1.5;   // put the ball in (or, far: 14 out, flying into) a goal mouth
+      match.m.b = { x: C.W / 2, y: team === 0 ? d : C.H - d, vx: 0, vy: team === 0 ? -40 : 40 }; return true; },
     state(){ return { room: room && { code: room.code, size: room.size, k: room.k, you: room.you }, match: match && { id: match.id, md: match.md, bot: match.bot, ack: match.ack, st: match.m.st }, results: results.slice(), acked, nIn, lastIn }; }
   };
   return { socket, post };

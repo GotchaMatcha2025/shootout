@@ -10,17 +10,18 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800;900&family=Bowlby+One&display=swap">
-<link rel="stylesheet" href="assets/3v3.css?v=1">
+<link rel="stylesheet" href="assets/3v3.css?v=3">
 </head>
 <body>
 <!-- Screens, ids and words = mock-up rev 4 (owner yes to rev 3 ~20:52 + "fewest words", DECISIONS 12 Nov). The skin lives in 3v3.css only. -->
 <main class="app" id="app">
   <button class="sbtn" id="soundBtn" aria-pressed="true" aria-label="Sound on">🔊</button>
+  <button class="tbtn" id="ticketBtn" aria-label="Your prize" hidden>🎟</button>
 
   <section class="scr" id="s-home">
     <canvas class="bgpitch" id="bgpitch" aria-hidden="true"></canvas>
     <img class="logo" src="../assets/img/logo-lockup-white.webp" alt="Gotcha Matcha" width="132" height="40">
-    <h1 class="title">SHOOT<br>OUT<small>3 V 3</small></h1>
+    <h1 class="title">SHOOT<br>OUT</h1>
     <div class="spacer"></div>
     <button class="btn" id="goJoin">▶ Play</button>
     <a class="small lnk" href="rules/">Rules</a>
@@ -79,14 +80,17 @@
     <div class="hud"><span class="tchip m" id="hudA">MATCHA</span><span class="tchip yz" id="hudB">YUZU</span><span class="clock" id="clock">60</span></div>
     <div class="banner" id="banner"></div>
     <div class="hint" id="hint" aria-label="Drag your player"><span class="fing">👆</span> ↑</div>
+    <div class="offb" id="offBadge" hidden>Offline · no prize</div>
   </section>
 
   <section class="scr" id="s-result" hidden>
     <h2 class="big" id="rTitle">WIN!</h2>
     <p class="small" id="rEyebrow">1 – 0</p>
+    <p class="small" id="noPrize" hidden></p>
     <div class="prize" id="prize" hidden>
       <span class="v" id="pV">PRIZE</span>
       <span class="code" id="pCode">------</span>
+      <span class="by" id="pBy"></span>
       <span class="s" id="pS">Redeem at the counter</span>
     </div>
     <div class="spacer"></div>
@@ -107,18 +111,28 @@
   </section>
 
   <canvas class="fxl" id="fx" aria-hidden="true"></canvas>
+  <!-- the prize ticket: open from 🎟 on any screen until it is used or expires (adversarial S1: a code never vanishes) -->
+  <div class="sheet" id="ticket" role="dialog" aria-label="Your prize" hidden>
+    <div class="prize">
+      <span class="v" id="tV">PRIZE</span>
+      <span class="code" id="tCode">------</span>
+      <span class="by" id="tBy"></span>
+      <span class="s" id="tS">Redeem at the counter</span>
+    </div>
+    <button class="btn ghost" id="ticketClose" aria-label="Close">✕</button>
+  </div>
   <div class="pill" id="pill" hidden>Reconnecting…</div>
   <div class="toast" id="toast" hidden></div>
   <div class="dbg" id="dbg" hidden></div>
   <div class="ribbon" id="ribbon" hidden></div>
 </main>
-<script src="assets/sim.js?v=2"></script>
-<script src="assets/logic.js?v=1"></script>
-<script src="assets/net.js?v=1"></script>
-<script src="assets/fake.js?v=1"></script>
-<script src="assets/draw.js?v=1"></script>
-<script src="assets/sfx.js?v=1"></script>
-<script src="assets/fx.js?v=1"></script>
-<script src="assets/game.js?v=1"></script>
+<script src="assets/sim.js?v=3"></script>
+<script src="assets/logic.js?v=3"></script>
+<script src="assets/net.js?v=3"></script>
+<script src="assets/fake.js?v=3"></script>
+<script src="assets/draw.js?v=3"></script>
+<script src="assets/sfx.js?v=3"></script>
+<script src="assets/fx.js?v=3"></script>
+<script src="assets/game.js?v=3"></script>
 </body>
 </html>

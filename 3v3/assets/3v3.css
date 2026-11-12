@@ -37,6 +37,14 @@ a{color:var(--yuzu)}
 .ribbon{position:absolute;left:0;right:0;bottom:0;z-index:30;font:800 10px/1 var(--f-body);letter-spacing:1.4px;text-transform:uppercase;text-align:center;color:var(--night);
   background:var(--yuzu);padding:6px 4px calc(var(--sb) + 7px);pointer-events:none}
 .sbtn{position:absolute;top:calc(var(--st) + 10px);right:calc(var(--sr) + 10px);z-index:31;width:44px;height:44px;border-radius:50%;border:0;background:#0009;color:var(--cream);font-size:18px;cursor:pointer}
+.tbtn{position:absolute;top:calc(var(--st) + 10px);left:calc(var(--sl) + 10px);z-index:31;width:44px;height:44px;border-radius:50%;border:0;background:var(--yuzu);color:var(--night);font-size:22px;cursor:pointer;box-shadow:0 0 18px #ffd23f88}
+.sheet{position:absolute;top:0;right:0;bottom:0;left:0;z-index:35;background:#07110bf2;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;
+  padding:calc(var(--st) + 24px) calc(var(--sr) + 20px) calc(var(--sb) + 24px) calc(var(--sl) + 20px)}
+.sheet .btn{max-width:120px}
+.prize .by{font:900 18px/1 var(--f-body);text-align:center}
+.prize .by:empty{display:none}
+#noPrize{font-size:15px;color:var(--flood)}
+.offb{position:absolute;left:50%;top:calc(var(--st) + 58px);transform:translateX(-50%);z-index:6;background:#000c;color:var(--yuzu);font:900 12px/1 var(--f-body);letter-spacing:.5px;padding:7px 10px;border-radius:999px;pointer-events:none;white-space:nowrap}
 .pill{position:absolute;left:50%;top:calc(var(--st) + 58px);transform:translateX(-50%);z-index:40;background:var(--danger);color:var(--night);font:900 14px/1 var(--f-body);
   padding:10px 16px;border-radius:999px;box-shadow:0 6px 20px #0008;white-space:nowrap;pointer-events:none}
 .dbg{position:absolute;left:calc(var(--sl) + 8px);bottom:calc(var(--sb) + 30px);z-index:41;background:#000c;color:#9f9;font:700 11px/1.3 ui-monospace,Menlo,monospace;padding:4px 6px;border-radius:6px;pointer-events:none;white-space:pre}

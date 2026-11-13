@@ -101,10 +101,10 @@ function joinCode(code){
 function pickThen(f){ f(); }
 let tickerAt = 0;   // the ticker's counts are asked again when home shows (at most every 30 s)
 function homeTicker(){ if (Date.now() - tickerAt < 30000) return; tickerAt = Date.now(); Net.health().then(h => { if (h && h.ok) ticker(h); }); }
-[["#tgJoin", CONFIG.telegram], ["#igJoin", CONFIG.instagram], ["#restTg", CONFIG.telegram], ["#restIg", CONFIG.instagram]].forEach(([s, u]) => { $(s).href = u; });
+[["#igJoin", CONFIG.instagram], ["#restTg", CONFIG.telegram], ["#restIg", CONFIG.instagram]].forEach(([s, u]) => { $(s).href = u; });
 // a page can't check a follow or a channel join: Play works once either link was tapped (owner 12 Nov ~20:20), remembered on this phone
 function joinedNow(){ G.joined = true; Store.set("s3v3:joined", 1); $("#tgErr").hidden = true; }
-$("#tgJoin").addEventListener("click", joinedNow); $("#igJoin").addEventListener("click", joinedNow);
+$("#igJoin").addEventListener("click", joinedNow);   // owner 13 Nov: Instagram only
 $("#goPick").addEventListener("click", () => { if (!G.joined){ $("#tgErr").hidden = false; return; } afterJoinStep(); });
 function modeState(){
   $("#mSoloSub").textContent = L3.goals(G.need) + " wins";

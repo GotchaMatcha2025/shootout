@@ -251,4 +251,4 @@ a{color:var(--yuzu)}
 .slot{cursor:default}
 #startGo[disabled]{opacity:.35;box-shadow:none}
 .slot.empty{border:0;background:#ffffff0a}   /* a plain free seat (no "+") */
-#s-join .h2{margin-top:46px}   /* the follow line clears the sound button (owner 13 Nov follow step) */
+#s-join{justify-content:center}#s-join .spacer{display:none}#s-join .h2{margin-top:0}#s-join #goPick{margin-top:10px}   /* owner 13 Nov "move it to the middle": line, IG button and Play together, centred */
